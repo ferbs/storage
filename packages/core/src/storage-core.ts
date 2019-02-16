@@ -1,5 +1,5 @@
-import {registerStore, registerAdapter, adapterFactory, StoreFactoryFunction, AdapterFactoryFunction, storeFactory,} from './registration';
-import NormalizeArgsAdapter from "./normalize-args-adapter";
+import {registerStore, registerDecorator, decoratorFactory, StoreFactoryFunction, DecoratorFactoryFunction, storeFactory,} from './serialized-config';
+import NormalizeArgsDecorator from "./normalize-args-decorator";
 import middlewareTraverser, {ComposedMiddleware} from "./middleware-traverser";
 
 
@@ -19,15 +19,15 @@ export interface IDataStoreLayer {
   get: DataStoreMethod;
 }
 
-export interface IStorageAdapter extends IDataStoreLayer {
-  isStorageAdapter: boolean;
+export interface IStorageDecorator extends IDataStoreLayer {
+  isStorageDecorator: boolean;
 }
 
 export interface IDataStore extends IDataStoreLayer {
 }
 
 export interface IStorageOpts {
-  adapters?: Array<string | IStorageAdapter>;
+  transforms?: Array<string | IStorageDecorator>;
   engine?: any;
 }
 
@@ -45,21 +45,21 @@ type GetParam = Key | Keys | KeyValuePairs;
 
 export default class Storage {
   readonly dataStore: IDataStore;
-  adapters: IStorageAdapter[];
+  transforms: IStorageDecorator[];
   _middlewareTransformer = <ComposedMiddleware | null> null;
 
   constructor(dataStore: IDataStore | string, opts=<IStorageOpts>{}) {
     this.dataStore = storeFactory(dataStore, opts);
-    this.adapters = [ new NormalizeArgsAdapter(opts) ]
-    this.useAdapters(opts.adapters);
+    this.transforms = [ new NormalizeArgsDecorator(opts) ]
+    this.useTransforms(opts.transforms);
   }
 
   static registerStoreFactory(engineType: string, engineFactory: StoreFactoryFunction): void {
     registerStore(engineType, engineFactory);
   }
 
-  static registerAdapterFactory(engineType: string, engineFactory: AdapterFactoryFunction): void {
-    registerAdapter(engineType, engineFactory);
+  static registerDecoratorFactory(engineType: string, engineFactory: DecoratorFactoryFunction): void {
+    registerDecorator(engineType, engineFactory);
   }
 
   async get(keys: GetParam, ...extraArgs: any): Promise<any> {
@@ -67,16 +67,16 @@ export default class Storage {
     return this._makeTransformedRequest(ctx);
   }
 
-  useAdapter(adapterType: string, opts?: IGenericOpts) {
-    this.adapters.push(adapterFactory(adapterType, opts));
+  useTransform(decoratorType: string, opts?: IGenericOpts) {
+    this.transforms.push(decoratorFactory(decoratorType, opts));
     this._middlewareTransformer = null;
   }
 
-  useAdapters(configs: any): void {
+  useTransforms(configs: any): void {
     if (Array.isArray(configs)) {
-      configs.forEach(c => this._appendAdapterFromConfig(c));
+      configs.forEach(c => this._appendDecoratorFromConfig(c));
     } else {
-      this._appendAdapterFromConfig(configs);
+      this._appendDecoratorFromConfig(configs);
     }
   }
 
@@ -96,7 +96,7 @@ export default class Storage {
 
   async _makeTransformedRequest(ctx: IStorageRequestContext): Promise<any> {
     if (!this._middlewareTransformer) {
-      this._middlewareTransformer = middlewareTraverser(this.dataStore, this.adapters);
+      this._middlewareTransformer = middlewareTraverser(this.dataStore, this.transforms);
     }
     try {
       await this._middlewareTransformer(ctx);
@@ -111,31 +111,31 @@ export default class Storage {
   }
 
 
-  _appendAdapterFromConfig(config: any): void {
+  _appendDecoratorFromConfig(config: any): void {
     if (!config) {
       return;
     }
     if (typeof config === 'object' && !Array.isArray(config)) {
-      Object.keys(config).forEach(k => this.useAdapter(k, config[k]));
+      Object.keys(config).forEach(k => this.useTransform(k, config[k]));
       return;
     }
-    let adapterType, opts;
+    let decoratorType, opts;
     if (Array.isArray(config)) { // case of a tuple, eg [ 'keyName', { prefix: 'hello/' } ]
       const len = config.length;
       if (len < 1 || len > 2) {
-        console.warn('Invalid adapter configuration. When passing an array, it expects [ adapterType, options ]', config);
+        console.warn('Invalid decorator configuration. When passing an array, it expects [ decoratorType, options ]', config);
       } else {
-        adapterType = config[0];
+        decoratorType = config[0];
         opts = config[1]
       }
     } else if (typeof config === 'string') {
-      adapterType = config;
+      decoratorType = config;
       opts = {};
     }
-    if (adapterType) {
-      this.useAdapter(adapterType, opts);
+    if (decoratorType) {
+      this.useTransform(decoratorType, opts);
     } else {
-      console.warn('Ignoring invalid adapter configuration', config);
+      console.warn('Ignoring invalid decorator configuration', config);
     }
   }
 

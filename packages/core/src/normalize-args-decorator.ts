@@ -1,8 +1,8 @@
-import {IStorageAdapter} from "core/lib/storage-core";
+import {IStorageDecorator} from "core/lib/storage-core";
 import {IStorageOpts, IStorageRequestContext, NextLayer} from "./storage-core";
 
 
-export default class NormalizeArgsAdapter implements IStorageAdapter {
+export default class NormalizeArgsDecorator implements IStorageDecorator {
   constructor(opts: IStorageOpts) {
 
   }
@@ -13,5 +13,5 @@ export default class NormalizeArgsAdapter implements IStorageAdapter {
     await next();
   }
 
-  isStorageAdapter = true;
+  isStorageDecorator = true;
 }
