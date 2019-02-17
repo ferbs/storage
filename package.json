@@ -8,7 +8,7 @@
   "author": "Jeff Ferber",
   "license": "MIT",
   "private": true,
-   "workspaces": [
+  "workspaces": [
     "packages/*"
   ],
   "devDependencies": {

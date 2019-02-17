@@ -6,6 +6,9 @@
     "noImplicitReturns": false,
     "noUnusedLocals": false,
     "lib": [ "dom", "es2015" ],
-    "target": "es6"
+    "target": "es6",
+    "paths": {
+      "core/*": [ "core/src/*" ]
+    }
   }
 }

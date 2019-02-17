@@ -1,4 +1,5 @@
-import {IDataStore, IStorageOpts, IStorageRequestContext, KeyValuePairs, NextLayer} from "./storage-core";
+import {IDataStore, IStorageOpts, KeyValuePairs, NextLayer} from "./storage-core";
+import StorageRequestContext from "./storage-request-context";
 
 
 export default class MemoryStore implements IDataStore {
@@ -11,21 +12,19 @@ export default class MemoryStore implements IDataStore {
     return 'memory';
   }
 
-  async get(ctx: IStorageRequestContext): Promise<any> {
+  async get(ctx: StorageRequestContext): Promise<any> {
     let res = <KeyValuePairs>{};
-    const keyDefaultPairs = <KeyValuePairs>ctx.keys;
-    if (keyDefaultPairs) {
-      Object.keys(keyDefaultPairs).forEach(key => {
-        let val = this.__snapshot[key];
-        if (typeof val === 'undefined' || (ctx.opts.useDefaultForNulls && val === null)) {
-          val = keyDefaultPairs[key];
-        }
-        res[key] = val;
-      });
-    }
+    (ctx.keysToGet || []).forEach(k => {
+      res[k] = this.__snapshot[k];
+    });
     ctx.result = res;
   }
 
+  async set(ctx: StorageRequestContext): Promise<any> {
+    // todo
+  }
+
+  isDataStore = true;
 }
 
 

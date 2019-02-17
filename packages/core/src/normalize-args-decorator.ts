@@ -1,17 +1,24 @@
-import {IStorageDecorator} from "core/lib/storage-core";
-import {IStorageOpts, IStorageRequestContext, NextLayer} from "./storage-core";
+import {IStorageOpts, NextLayer } from "./storage-core";
+import StorageRequestContext from "./storage-request-context";
+import NoopDecorator from "./noop-decorator";
 
 
-export default class NormalizeArgsDecorator implements IStorageDecorator {
-  constructor(opts: IStorageOpts) {
+export default class NormalizeArgsDecorator extends NoopDecorator {
 
+  constructor(opts?: IStorageOpts) {
+    super(opts);
   }
 
-  async get(ctx: IStorageRequestContext, next: NextLayer): Promise<any> {
-    // @ts-ignore
-    ctx.keys = { [ ctx.keys ]: null }; // tmp - remove! placeholder to see if jest is working
+  async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
     await next();
+    if (ctx.isSoloGet && typeof ctx.result === 'object') {
+      // todo: or better to do: ctx.result = ctx.result[ctx.keys] ?
+      const keys = Object.keys(ctx.result);
+      if (keys.length === 1) {
+        ctx.result = ctx.result[keys[0]];
+      }
+    }
   }
 
-  isStorageDecorator = true;
 }
+

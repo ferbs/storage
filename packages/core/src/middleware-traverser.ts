@@ -1,13 +1,14 @@
-import {DataStoreMethod, IDataStore, IDataStoreLayer, IStorageDecorator, IStorageRequestContext,} from "./storage-core";
+import {DataStoreMethod, IDataStore, IStorageDecorator,} from "./storage-core";
+import StorageRequestContext from "./storage-request-context";
 
 
-export type ComposedMiddleware = (ctx: IStorageRequestContext) => Promise<any>;
+export type MiddlewareTraverser = (ctx: StorageRequestContext) => Promise<any>;
 
 
-export default function middlewareTraverser(dataStore: IDataStore, decorators: IStorageDecorator[]): ComposedMiddleware {
-  return (ctx: IStorageRequestContext): Promise<any> => {
+export default function middlewareTraverser(dataStore: IDataStore, decorators: IStorageDecorator[]): MiddlewareTraverser {
+  return (ctx: StorageRequestContext): Promise<any> => {
     const decoratorCount = decorators.length;
-    const callNextLayer = (ctx: IStorageRequestContext, ndx: number): Promise<any> => {
+    const callNextLayer = (ctx: StorageRequestContext, ndx: number): Promise<any> => {
       if (ctx.error) {
         return Promise.reject(ctx.error);
       }
@@ -38,7 +39,7 @@ export default function middlewareTraverser(dataStore: IDataStore, decorators: I
 
 }
 
-function _storageMethod(store: IDataStoreLayer, methodName: string): DataStoreMethod {
+function _storageMethod(store: IDataStore | IStorageDecorator, methodName: string): DataStoreMethod {
   // @ts-ignore
   return store[methodName];
 }

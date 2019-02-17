@@ -1,22 +1,66 @@
-import {registerStore, registerDecorator, decoratorFactory, StoreFactoryFunction, DecoratorFactoryFunction, storeFactory,} from './serialized-config';
+import * as serializedConfig from './serialized-config';
+import {DecoratorFactoryFunction, StoreFactoryFunction} from "./serialized-config";
 import NormalizeArgsDecorator from "./normalize-args-decorator";
-import middlewareTraverser, {ComposedMiddleware} from "./middleware-traverser";
+import middlewareTraverser, {MiddlewareTraverser} from "./middleware-traverser";
+import StorageRequestContext from "./storage-request-context";
+import LocalForageAdapterStore from "./local-forage-adapter-store";
 
 
-export interface IStorageRequestContext extends KeyValuePairs {
-  methodName: string;
-  opts: KeyValuePairs;
 
-  keys?: GetParam;
-  nodejsCallback?: (...args: any[]) => any;
-  result?: any;
+
+type NodejsCallback = (err: any, value?: any) => void;
+
+
+
+/**
+ * localForage interface, for API compatability.
+ *
+ * Copied from localForage/typings/localforage.d.ts commit 349a874. Supporting its core public storage methods. (todo: or import as dev dependency, to use its typescript definitions directly?)
+ */
+interface LocalForageDbMethodsCore {
+  getItem<T>(key: string, callback?: (err: any, value: T) => void): Promise<T>;
+
+  setItem<T>(key: string, value: T, callback?: (err: any, value: T) => void): Promise<T>;
+
+  // wip todo: removeItem(key: string, callback?: (err: any) => void): Promise<void>;
+  //
+  // wip todo: clear(callback?: (err: any) => void): Promise<void>;
+  //
+  // wip todo: length(callback?: (err: any, numberOfKeys: number) => void): Promise<number>;
+  //
+  // note: skipping. (assuming ok to ignore "key" method for now.)
+  // key(keyIndex: number, callback?: (err: any, key: string) => void): Promise<string>;
+
+  // wip todo: keys(callback?: (err: any, keys: string[]) => void): Promise<string[]>;
+  //
+  // wip todo: iterate<T, U>(iteratee: (value: T, key: string, iterationNumber: number) => U,
+  //               callback?: (err: any, result: U) => void): Promise<U>;
+
 }
 
 export type NextLayer = () => Promise<any>;
-export type DataStoreMethod = (ctx: IStorageRequestContext, next: NextLayer) => Promise<any>;
+export type DataStoreMethod = (ctx: StorageRequestContext, next: NextLayer) => Promise<any>;
 
+export enum DataMethod {
+  Clear = 'clear',
+  Get = 'get',
+  Keys = 'keys',
+  Remove = 'remove',
+  Set = 'set',
+  Snapshot = 'snapshot',
+}
+/**
+ * Interface for decorators/transforms and underlying stores. It is simpler than the public-facing interface. They can expect
+ * all input parameters to have been normalized, and do not need to implement alias method names and such.
+ */
 export interface IDataStoreLayer {
+  // meh, using computed property name confuses my IDE.. [ DataMethod.Get ]: DataStoreMethod
+  // wip todo: clear: DataStoreMethod;
   get: DataStoreMethod;
+  // wip todo: keys: DataStoreMethod;
+  // wip todo: remove: DataStoreMethod;
+  set: DataStoreMethod;
+  // wip todo: snapshot: DataStoreMethod;
 }
 
 export interface IStorageDecorator extends IDataStoreLayer {
@@ -24,6 +68,7 @@ export interface IStorageDecorator extends IDataStoreLayer {
 }
 
 export interface IDataStore extends IDataStoreLayer {
+  isDataStore: boolean;
 }
 
 export interface IStorageOpts {
@@ -34,72 +79,112 @@ export interface IStorageOpts {
 export interface IGenericOpts {
   [ key: string ]: any;
 }
+
+export type ItemKey = string;
+export type ItemKeys = string[];
 export interface KeyValuePairs {
   [ key: string ]: any;
 }
-type Key = string;
-type Keys = string[];
-
-type GetParam = Key | Keys | KeyValuePairs;
 
 
-export default class Storage {
+
+export default class Storage implements LocalForageDbMethodsCore {
   readonly dataStore: IDataStore;
+  readonly storageConstructorOpts: IGenericOpts;
   transforms: IStorageDecorator[];
-  _middlewareTransformer = <ComposedMiddleware | null> null;
+  _middlewareTransformer = <MiddlewareTraverser | null> null;
 
   constructor(dataStore: IDataStore | string, opts=<IStorageOpts>{}) {
-    this.dataStore = storeFactory(dataStore, opts);
-    this.transforms = [ new NormalizeArgsDecorator(opts) ]
-    this.useTransforms(opts.transforms);
+    this.storageConstructorOpts = opts;
+    if (typeof dataStore === 'string') {
+      this.dataStore = serializedConfig.storeFactory(dataStore, opts);
+    } else if (this._isLocalForage(dataStore)) {
+      this.dataStore = new LocalForageAdapterStore(dataStore);
+    } else if (this._isDataStore(dataStore)) {
+      this.dataStore = dataStore as IDataStore;
+    } else {
+      throw new Error('Data store required');
+    }
+
+    this.transforms = [ new NormalizeArgsDecorator(opts) ];
+    serializedConfig.appendDecoratorsFromConfig(this, opts.transforms);
   }
 
   static registerStoreFactory(engineType: string, engineFactory: StoreFactoryFunction): void {
-    registerStore(engineType, engineFactory);
+    serializedConfig.registerStore(engineType, engineFactory);
   }
 
   static registerDecoratorFactory(engineType: string, engineFactory: DecoratorFactoryFunction): void {
-    registerDecorator(engineType, engineFactory);
+    serializedConfig.registerDecorator(engineType, engineFactory);
   }
 
-  async get(keys: GetParam, ...extraArgs: any): Promise<any> {
-    const ctx = this._createContext('get', { keys }, extraArgs);
-    return this._makeTransformedRequest(ctx);
+  get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts): Promise<T>;
+  get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts, callback?: NodejsCallback): void;
+  get(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Get, args);
   }
 
-  useTransform(decoratorType: string, opts?: IGenericOpts) {
-    this.transforms.push(decoratorFactory(decoratorType, opts));
-    this._middlewareTransformer = null;
+  /**
+   * Compatible with LocalForage. Similar to `get` but it does not accept options that are passed along to transforms.
+   * @param key
+   * @param callback
+   */
+  getItem<T>(key: string, callback?: (err: any, value: T) => void): void;
+  getItem<T>(key: string): Promise<T>;
+  getItem(key: string, callback?: NodejsCallback): Promise<any> | void {
+    return this.get(key, callback);
   }
 
-  useTransforms(configs: any): void {
-    if (Array.isArray(configs)) {
-      configs.forEach(c => this._appendDecoratorFromConfig(c));
+  set(keyValuePairs: KeyValuePairs, opts?: IGenericOpts): Promise<any>;
+  set(keyValuePairs: KeyValuePairs, opts?: IGenericOpts, callback?: NodejsCallback): void;
+  set(key: string, value: any, opts?: IGenericOpts): Promise<any>;
+  set(key: string, value: any, opts?: IGenericOpts, callback?: NodejsCallback): void;
+  set(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Set, args);
+  }
+
+  setItem<T>(key: string, value: T): Promise<T>;
+  setItem<T>(key: string, value: T, callback: (err: any, value: T) => void): void;
+  setItem(key: string, value: any, callback?: NodejsCallback): Promise<any> | void {
+    return this.set(key, value, callback);
+  }
+
+
+  useTransform(raw: string | IStorageDecorator, opts?: IGenericOpts) {
+    let decorator;
+    if (typeof raw === 'string') {
+      decorator = serializedConfig.decoratorFactory(raw, opts);
     } else {
-      this._appendDecoratorFromConfig(configs);
+      decorator = raw;
     }
+    decorator && this.transforms.push(decorator);
+    this._middlewareTransformer = null; // to force a middleware rebuild should it have been used already
   }
 
-  _createContext(methodName: string, contextData: IGenericOpts, extraArgs: any[]): IStorageRequestContext {
-    let nodejsCallback;
-    extraArgs = extraArgs || []
-    if (typeof extraArgs[extraArgs.length - 1] === 'function') {
-      nodejsCallback = extraArgs.pop();
-    }
-    const opts = Object.assign({}, ...extraArgs);
-    return Object.assign({}, contextData, {
-      methodName,
-      nodejsCallback,
-      opts,
-    });
-  }
-
-  async _makeTransformedRequest(ctx: IStorageRequestContext): Promise<any> {
+  _getMiddlewareTraverser(): MiddlewareTraverser {
     if (!this._middlewareTransformer) {
       this._middlewareTransformer = middlewareTraverser(this.dataStore, this.transforms);
     }
+    return this._middlewareTransformer;
+  }
+
+  _dataRequestWithPromiseOrCallback(methodName: DataMethod, args: any[]): Promise<any> | void {
+    const ctx = new StorageRequestContext(methodName, args, {
+      storageConstructorOpts: this.storageConstructorOpts
+    });
+    const promise = this._makeTransformedRequest(ctx);
+    if (ctx.useNodeJsCallback()) {
+      const noop = () => {};
+      promise.then(noop).catch(noop);
+    } else {
+      return promise;
+    }
+  }
+
+  async _makeTransformedRequest(ctx: StorageRequestContext): Promise<any> {
+    const middlewareTransformer = this._getMiddlewareTraverser();
     try {
-      await this._middlewareTransformer(ctx);
+      await middlewareTransformer(ctx);
     } catch (err) {
       return Promise.reject(err);
     }
@@ -111,33 +196,12 @@ export default class Storage {
   }
 
 
-  _appendDecoratorFromConfig(config: any): void {
-    if (!config) {
-      return;
-    }
-    if (typeof config === 'object' && !Array.isArray(config)) {
-      Object.keys(config).forEach(k => this.useTransform(k, config[k]));
-      return;
-    }
-    let decoratorType, opts;
-    if (Array.isArray(config)) { // case of a tuple, eg [ 'keyName', { prefix: 'hello/' } ]
-      const len = config.length;
-      if (len < 1 || len > 2) {
-        console.warn('Invalid decorator configuration. When passing an array, it expects [ decoratorType, options ]', config);
-      } else {
-        decoratorType = config[0];
-        opts = config[1]
-      }
-    } else if (typeof config === 'string') {
-      decoratorType = config;
-      opts = {};
-    }
-    if (decoratorType) {
-      this.useTransform(decoratorType, opts);
-    } else {
-      console.warn('Ignoring invalid decorator configuration', config);
-    }
+  private _isLocalForage(val: any): boolean {
+    return val && [ 'getItem', 'setItem' ].every(m => typeof val[m] === 'function');
   }
 
-
+  private _isDataStore(val: any): boolean {
+    return val && val.isDataStore && [ 'get', 'set' ].every(m => typeof val[m] === 'function');
+  }
 }
+
