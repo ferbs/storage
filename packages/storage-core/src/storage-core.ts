@@ -8,6 +8,7 @@ import LocalForageAdapterStore from "./local-forage-adapter-store";
 
 type NodejsCallback = (err: any, value?: any) => void;
 
+
 /**
  * localForage interface, for API compatability.
  *
@@ -224,33 +225,10 @@ export default class Storage implements LocalForageDbMethodsCore {
     this._middlewareTransformer = null; // to force a middleware rebuild should it have been used already
   }
 
-  _getMiddlewareTraverser(): MiddlewareTraverser {
-    if (!this._middlewareTransformer) {
-      this._middlewareTransformer = middlewareTraverser(this.dataStore, this.transforms);
-    }
-    return this._middlewareTransformer;
-  }
-
   _dataRequestWithPromiseOrCallback(methodName: DataMethod, args: any[]): Promise<any> | void {
-    const ctx = new StorageRequestContext(methodName, args, {
-      storageConstructorOpts: this.storageConstructorOpts
-    });
-    const promise = this._makeTransformedRequest(ctx);
-    return this._useCallbackOrReturnPromise(promise, ctx.nodejsCallback);
-  }
-
-  async _makeTransformedRequest(ctx: StorageRequestContext): Promise<any> {
-    const middlewareTransformer = this._getMiddlewareTraverser();
-    try {
-      await middlewareTransformer(ctx);
-    } catch (err) {
-      return Promise.reject(err);
-    }
-    if (ctx.error) {
-      return Promise.reject(ctx.error)
-    } else {
-      return Promise.resolve(ctx.result);
-    }
+    const { dataStore, transforms, storageConstructorOpts } = this;
+    const ctx = new StorageRequestContext(args, { methodName, dataStore, transforms, storageConstructorOpts });
+    return this._useCallbackOrReturnPromise(ctx.makeTransformedRequest(), ctx.nodejsCallback);
   }
 
 
@@ -272,3 +250,7 @@ export default class Storage implements LocalForageDbMethodsCore {
 
 }
 
+
+export {
+  StorageRequestContext,
+}

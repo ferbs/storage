@@ -1,6 +1,7 @@
 import NoopDecorator from "../../src/noop-decorator";
 import StorageRequestContext from "../../src/storage-request-context";
-import {NextLayer} from "../../src/storage-core";
+import {DataMethod, NextLayer} from "../../src/storage-core";
+const _ = require('lodash');
 
 
 export enum CharPlacement {
@@ -64,3 +65,35 @@ export class TestDecoratorForResultStrings extends NoopDecorator {
     ctx.result = result;
   }
 }
+
+export enum TestFixtureDecoratorPlacement {
+  Before, After
+}
+export interface ITestFixtureArbitraryDecoratorConfig {
+  method: DataMethod;
+  placement: TestFixtureDecoratorPlacement;
+  callback: (ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => void;
+}
+export class TestFixtureArbitraryDecorator extends NoopDecorator {
+  private readonly activitiesByMethod = {};
+  
+  constructor(activities: ITestFixtureArbitraryDecoratorConfig[]) {
+    super();
+    this.activitiesByMethod = _.groupBy(activities, 'method');
+  }
+}
+Object.values(DataMethod).forEach(methodName => {
+  TestFixtureArbitraryDecorator.prototype[methodName] = async function(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
+    const methods = this.activitiesByMethod[methodName] || [];
+    const callbackBefore = (methods.find(methodDef => methodDef.placement === TestFixtureDecoratorPlacement.Before) || {}).callback;
+    const callbackAfter = (methods.find(methodDef => methodDef.placement === TestFixtureDecoratorPlacement.After) || {}).callback;
+    if (_.isFunction(callbackBefore)) {
+      await callbackBefore(ctx, this);
+    }
+    await next();
+    if (_.isFunction(callbackAfter)) {
+      await callbackAfter(ctx, this);
+    }
+  }
+});
+ 

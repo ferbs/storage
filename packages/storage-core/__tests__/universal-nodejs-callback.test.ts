@@ -13,7 +13,7 @@ describe('@wranggle/storage-core nodejs-style callbacks', () => {
 
   test('"length" derived method accepts callback', done => {
     const noPromise = store.length((err, val) => {
-      expect(val).toEqual(0);
+      expect(val).toBe(0);
       done();
     });
     expect(noPromise).toBeUndefined();
@@ -23,7 +23,7 @@ describe('@wranggle/storage-core nodejs-style callbacks', () => {
     const noPromise = store.set('nested', 'deeply', () => {
       store.get('nested', (err, val) => {
         expect(err).toBeFalsy();
-        expect(val).toEqual('deeply');
+        expect(val).toBe('deeply');
         done();
       });
     });

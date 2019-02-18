@@ -1,11 +1,13 @@
-import {DataMethod, IGenericOpts, ItemKey, ItemKeys, KeyValuePairs} from "./storage-core";
-
-
+import {DataMethod, IDataStore, IGenericOpts, IStorageDecorator, KeyValuePairs} from "./storage-core";
+import middlewareTraverser from "./middleware-traverser";
 
 
 export default class StorageRequestContext {
-  readonly methodName: string;
+  readonly methodName!: DataMethod;
+  readonly dataStore!: IDataStore;
+  readonly transforms!: IStorageDecorator[];
   readonly storageConstructorOpts!: IGenericOpts;
+
   nodejsCallback?: (...args: any[]) => any;
   keysForGet?: string[]; // value is default when actual value not present, defaulting to undefined
   keysForRemove?: string[];
@@ -17,23 +19,53 @@ export default class StorageRequestContext {
   isSoloGet?: boolean;
 
 
-  constructor(methodName: string, userArgs: any[], contextData: Partial<StorageRequestContext>) {
-    this.methodName = methodName;
+  constructor(userArgs: any[], contextData: Partial<StorageRequestContext>) {
+    Object.assign(this, contextData); // methodName, dataStore, transforms, and storageConstructorOpts
     const rawArgs = userArgs.slice(0);
-    Object.assign(this, contextData);
-
     if (typeof rawArgs[rawArgs.length - 1] === 'function') {
       this.nodejsCallback = rawArgs.pop();
     }
+    const methodName = this.methodName;
 
     if (methodName === DataMethod.Get) {
       this.keysForGet = this._normalizeKeys(rawArgs);
     } else if (methodName === DataMethod.Set) {
-      this.keyValuePairsForSet = this._normalizeSetMethod(rawArgs);
+      this.keyValuePairsForSet = this._normalizedKeyValuePairsForSet(rawArgs);
     } else if (methodName === DataMethod.Remove) {
       this.keysForRemove = this._normalizeKeys(rawArgs);
     }
-    this.opts = Object.assign({}, contextData.opts, ...(rawArgs.map(arg => typeof arg === 'string' ? { primary: arg } : arg)));
+    this.opts = Object.assign({}, contextData.opts,
+      ...(rawArgs.map(arg => typeof arg === 'string' || typeof arg === 'number' ? { primary: arg } : arg)));
+  }
+
+  async makeTransformedRequest(): Promise<any> {
+    return StorageRequestContext.transformedRequest(this);
+  }
+
+  async makeUpstreamRequest(afterDecorator: IStorageDecorator, methodName: DataMethod, ...methodArgs: any[]) {
+    const ndx = this.transforms.findIndex(d => d === afterDecorator);
+    if (ndx >= 0) {
+      const { dataStore, storageConstructorOpts } = this;
+      const transforms = this.transforms.slice(ndx + 1);
+      const partialCtx = new StorageRequestContext(methodArgs, { methodName, dataStore, storageConstructorOpts, transforms });
+      return partialCtx.makeTransformedRequest();
+    } else {
+      throw new Error('CurrentDecoratorNotFound');
+    }
+  }
+
+  static async transformedRequest(ctx: StorageRequestContext): Promise<any> {
+    const middlewareTransformer = middlewareTraverser(ctx.dataStore, ctx.transforms);
+    try {
+      await middlewareTransformer(ctx);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    if (ctx.error) {
+      return Promise.reject(ctx.error)
+    } else {
+      return Promise.resolve(ctx.result);
+    }
   }
 
   useNodeJsCallback(): boolean {
@@ -65,7 +97,7 @@ export default class StorageRequestContext {
     return keys;
   }
 
-  private _normalizeSetMethod(userArgs: any[]): KeyValuePairs {
+  private _normalizedKeyValuePairsForSet(userArgs: any[]): KeyValuePairs {
     let keyValuePairs;
     const arg0 = userArgs.shift();
     if (typeof arg0 === 'object' && !Array.isArray(arg0)) {

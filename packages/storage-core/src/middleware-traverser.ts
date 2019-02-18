@@ -1,4 +1,4 @@
-import {DataStoreMethod, IDataStore, IStorageDecorator,} from "./storage-core";
+import { IDataStore, IStorageDecorator,} from "./storage-core";
 import StorageRequestContext from "./storage-request-context";
 
 
@@ -18,11 +18,11 @@ export default function middlewareTraverser(dataStore: IDataStore, decorators: I
       } else {
         const methodName = ctx.methodName;
         if (ndx === decoratorCount) {
-          const fn = _storageMethod(dataStore, methodName);
+          const fn = dataStore[methodName];
           res = Promise.resolve(fn.call(dataStore, ctx, () => Promise.resolve()));
         } else if (ndx < decoratorCount) {
           const decorator = decorators[ndx];
-          const fn = decorator && _storageMethod(decorator, methodName);
+          const fn = decorator && decorator[methodName]
           try {
             res = Promise.resolve(fn.call(decorator, ctx, () => callNextLayer(ctx, ndx + 1)));
           } catch (err) {
@@ -33,14 +33,7 @@ export default function middlewareTraverser(dataStore: IDataStore, decorators: I
         }
       }
       return res;
-    }
+    };
     return callNextLayer(ctx, 0);
   };
-
 }
-
-function _storageMethod(store: IDataStore | IStorageDecorator, methodName: string): DataStoreMethod {
-  // @ts-ignore
-  return store[methodName];
-}
-

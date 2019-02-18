@@ -12,7 +12,6 @@ export default class NormalizeArgsDecorator extends NoopDecorator {
   async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
     await next();
     if (ctx.isSoloGet && typeof ctx.result === 'object') {
-      // todo: or better to do: ctx.result = ctx.result[ctx.keys] ?
       const keys = Object.keys(ctx.result);
       if (keys.length === 1) {
         ctx.result = ctx.result[keys[0]];
