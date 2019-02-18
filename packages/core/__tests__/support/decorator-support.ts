@@ -21,7 +21,7 @@ export class TestDecoratorForKeys extends NoopDecorator {
   async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
     const chars = this.chars;
     const isPrefix = this.placement === CharPlacement.Prefix;
-    ctx.keysToGet = ctx.keysToGet.map(key => `${isPrefix ? chars : ''}${key}${ isPrefix ? '' : chars}`);
+    ctx.keysForGet = ctx.keysForGet.map(key => `${isPrefix ? chars : ''}${key}${ isPrefix ? '' : chars}`);
     await next();
   }
 }

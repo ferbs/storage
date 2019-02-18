@@ -6,36 +6,32 @@ import StorageRequestContext from "./storage-request-context";
 import LocalForageAdapterStore from "./local-forage-adapter-store";
 
 
-
-
 type NodejsCallback = (err: any, value?: any) => void;
-
-
 
 /**
  * localForage interface, for API compatability.
  *
  * Copied from localForage/typings/localforage.d.ts commit 349a874. Supporting its core public storage methods. (todo: or import as dev dependency, to use its typescript definitions directly?)
  */
-interface LocalForageDbMethodsCore {
+export interface LocalForageDbMethodsCore {
   getItem<T>(key: string, callback?: (err: any, value: T) => void): Promise<T>;
 
   setItem<T>(key: string, value: T, callback?: (err: any, value: T) => void): Promise<T>;
 
-  // wip todo: removeItem(key: string, callback?: (err: any) => void): Promise<void>;
-  //
-  // wip todo: clear(callback?: (err: any) => void): Promise<void>;
-  //
-  // wip todo: length(callback?: (err: any, numberOfKeys: number) => void): Promise<number>;
-  //
+  removeItem(key: string, callback?: (err: any) => void): Promise<void>;
+
+  clear(callback?: (err: any) => void): Promise<void>;
+
+  length(callback?: (err: any, numberOfKeys: number) => void): Promise<number>;
+
   // note: skipping. (assuming ok to ignore "key" method for now.)
   // key(keyIndex: number, callback?: (err: any, key: string) => void): Promise<string>;
 
-  // wip todo: keys(callback?: (err: any, keys: string[]) => void): Promise<string[]>;
-  //
-  // wip todo: iterate<T, U>(iteratee: (value: T, key: string, iterationNumber: number) => U,
-  //               callback?: (err: any, result: U) => void): Promise<U>;
+  keys(callback?: (err: any, keys: string[]) => void): Promise<string[]>;
 
+
+  iterate<T, U>(iteratee: (value: T, key: string, iterationNumber: number) => U,
+                callback?: (err: any, result: U) => void): Promise<U>;
 }
 
 export type NextLayer = () => Promise<any>;
@@ -54,13 +50,13 @@ export enum DataMethod {
  * all input parameters to have been normalized, and do not need to implement alias method names and such.
  */
 export interface IDataStoreLayer {
-  // meh, using computed property name confuses my IDE.. [ DataMethod.Get ]: DataStoreMethod
-  // wip todo: clear: DataStoreMethod;
+  clear: DataStoreMethod;
   get: DataStoreMethod;
-  // wip todo: keys: DataStoreMethod;
-  // wip todo: remove: DataStoreMethod;
+  keys: DataStoreMethod;
+  remove: DataStoreMethod;
   set: DataStoreMethod;
-  // wip todo: snapshot: DataStoreMethod;
+  snapshot: DataStoreMethod;
+  // tried using computed property names here but they confuse my IDE.. eg: [ DataMethod.Get ]: DataStoreMethod
 }
 
 export interface IStorageDecorator extends IDataStoreLayer {
@@ -94,12 +90,12 @@ export default class Storage implements LocalForageDbMethodsCore {
   transforms: IStorageDecorator[];
   _middlewareTransformer = <MiddlewareTraverser | null> null;
 
-  constructor(dataStore: IDataStore | string, opts=<IStorageOpts>{}) {
+  constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore, opts=<IStorageOpts>{}) {
     this.storageConstructorOpts = opts;
     if (typeof dataStore === 'string') {
       this.dataStore = serializedConfig.storeFactory(dataStore, opts);
     } else if (this._isLocalForage(dataStore)) {
-      this.dataStore = new LocalForageAdapterStore(dataStore);
+      this.dataStore = new LocalForageAdapterStore(dataStore as LocalForageDbMethodsCore);
     } else if (this._isDataStore(dataStore)) {
       this.dataStore = dataStore as IDataStore;
     } else {
@@ -118,6 +114,12 @@ export default class Storage implements LocalForageDbMethodsCore {
     serializedConfig.registerDecorator(engineType, engineFactory);
   }
 
+  clear(opts?: IGenericOpts): Promise<void>;
+  clear(opts?: IGenericOpts, callback?: (err: any) => void): void;
+  clear(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Clear, args);
+  }
+  
   get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts): Promise<T>;
   get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts, callback?: NodejsCallback): void;
   get(...args: any[]): Promise<any> | void {
@@ -129,10 +131,65 @@ export default class Storage implements LocalForageDbMethodsCore {
    * @param key
    * @param callback
    */
-  getItem<T>(key: string, callback?: (err: any, value: T) => void): void;
+  getItem<T>(key: string, callback?: NodejsCallback): void;
   getItem<T>(key: string): Promise<T>;
   getItem(key: string, callback?: NodejsCallback): Promise<any> | void {
     return this.get(key, callback);
+  }
+
+  /**
+   * Consider using store.snapshot().
+   * Including this for API compatibility with LocalForage..
+   * @param iteratee
+   * @param callback
+   */
+  iterate<T, U>(iteratee: (value: T, key: string, iterationNumber: number) => U,
+                callback?: (err: any, result: U) => void): Promise<U>;
+  iterate(iteratee: (value: any, key: string, iterationNumber: number) => any, callback: NodejsCallback): void;
+  iterate(iteratee: (value: any, key: string, iterationNumber: number) => any): Promise<any>;
+  iterate(...args: any[]): Promise<any> | void {
+    const iterator = args.shift();
+    const cb = args.pop();
+    const loop = (async () => {
+      const keys = await (this._dataRequestWithPromiseOrCallback(DataMethod.Keys, []) as Promise<string[]>);
+      let ndx = 0;
+      for (let key of keys) {
+        ndx += 1; // 1-based in localForage (says docs.. todo: try/test)
+        const val = await this.get(key);
+        const out = iterator(val, key, ndx);
+        if (out === void(0)) {
+          break;
+        }
+      }
+    });
+    return this._useCallbackOrReturnPromise(loop(), cb);
+  }
+
+  keys(opts?: IGenericOpts): Promise<string[]>;
+  keys(callback: NodejsCallback, opts?: IGenericOpts): void;
+  keys(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Keys, args);
+  }
+
+  length(): Promise<number>;
+  length(callback: NodejsCallback): void;
+  length(...args: any[]): Promise<any> | void {
+    const cb = args.pop();
+    const promisedLength = (this._dataRequestWithPromiseOrCallback(DataMethod.Keys, []) as Promise<any>)
+      .then(keys => Promise.resolve(keys.length));
+    return this._useCallbackOrReturnPromise(promisedLength, cb);
+  }
+
+  remove(keys: ItemKey | ItemKeys, opts?: IGenericOpts): Promise<any>;
+  remove(keys: ItemKey | ItemKeys, opts?: IGenericOpts, callback?: NodejsCallback): void;
+  remove(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Remove, args);
+  }
+
+  removeItem(key: string): Promise<void>;
+  removeItem(key: string, callback: NodejsCallback): void;
+  removeItem(key: string, callback?: NodejsCallback): Promise<any> | void {
+    return this.remove(key, callback);
   }
 
   set(keyValuePairs: KeyValuePairs, opts?: IGenericOpts): Promise<any>;
@@ -147,6 +204,12 @@ export default class Storage implements LocalForageDbMethodsCore {
   setItem<T>(key: string, value: T, callback: (err: any, value: T) => void): void;
   setItem(key: string, value: any, callback?: NodejsCallback): Promise<any> | void {
     return this.set(key, value, callback);
+  }
+
+  snapshot(opts?: IGenericOpts): Promise<string[]>;
+  snapshot(opts?: IGenericOpts, callback?: NodejsCallback): void;
+  snapshot(...args: any[]): Promise<any> | void {
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Snapshot, args);
   }
 
 
@@ -173,12 +236,7 @@ export default class Storage implements LocalForageDbMethodsCore {
       storageConstructorOpts: this.storageConstructorOpts
     });
     const promise = this._makeTransformedRequest(ctx);
-    if (ctx.useNodeJsCallback()) {
-      const noop = () => {};
-      promise.then(noop).catch(noop);
-    } else {
-      return promise;
-    }
+    return this._useCallbackOrReturnPromise(promise, ctx.nodejsCallback);
   }
 
   async _makeTransformedRequest(ctx: StorageRequestContext): Promise<any> {
@@ -203,5 +261,14 @@ export default class Storage implements LocalForageDbMethodsCore {
   private _isDataStore(val: any): boolean {
     return val && val.isDataStore && [ 'get', 'set' ].every(m => typeof val[m] === 'function');
   }
+
+  _useCallbackOrReturnPromise(actualPromise: Promise<any>, cb?: NodejsCallback): Promise<any> | void {
+    if (typeof cb === 'function') {
+      actualPromise.then(result => cb(null, result)).catch(err => cb(err));
+    } else {
+      return actualPromise;
+    }
+  }
+
 }
 

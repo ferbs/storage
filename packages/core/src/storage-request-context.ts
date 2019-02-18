@@ -7,8 +7,10 @@ export default class StorageRequestContext {
   readonly methodName: string;
   readonly storageConstructorOpts!: IGenericOpts;
   nodejsCallback?: (...args: any[]) => any;
-  keysToGet?: string[]; // value is default when actual value not present, defaulting to undefined
-  keyValuePairsToSet?: KeyValuePairs;
+  keysForGet?: string[]; // value is default when actual value not present, defaulting to undefined
+  keysForRemove?: string[];
+  keyValuePairsForSet?: KeyValuePairs;
+
   opts: IGenericOpts;
   error?: any;
   result?: any;
@@ -17,17 +19,21 @@ export default class StorageRequestContext {
 
   constructor(methodName: string, userArgs: any[], contextData: Partial<StorageRequestContext>) {
     this.methodName = methodName;
-    if (typeof userArgs[userArgs.length - 1] === 'function') {
-      this.nodejsCallback = userArgs.pop();
-    }
+    const rawArgs = userArgs.slice(0);
     Object.assign(this, contextData);
 
-    if (methodName === DataMethod.Get) {
-      this._normalizeGetMethod(userArgs);
-    } else if (methodName === DataMethod.Set) {
-      this._normalizeSetMethod(userArgs);
+    if (typeof rawArgs[rawArgs.length - 1] === 'function') {
+      this.nodejsCallback = rawArgs.pop();
     }
-    this.opts = Object.assign({}, contextData.opts, ...(userArgs.map(arg => typeof arg === 'string' ? { primary: arg } : arg)));
+
+    if (methodName === DataMethod.Get) {
+      this.keysForGet = this._normalizeKeys(rawArgs);
+    } else if (methodName === DataMethod.Set) {
+      this.keyValuePairsForSet = this._normalizeSetMethod(rawArgs);
+    } else if (methodName === DataMethod.Remove) {
+      this.keysForRemove = this._normalizeKeys(rawArgs);
+    }
+    this.opts = Object.assign({}, contextData.opts, ...(rawArgs.map(arg => typeof arg === 'string' ? { primary: arg } : arg)));
   }
 
   useNodeJsCallback(): boolean {
@@ -38,10 +44,10 @@ export default class StorageRequestContext {
    * Normalizes keys to a key-value pair object, where the value is desired default when item is not present, loosely following the
    * browser storage API.
    * @private
-   * @param userArgs
+   * @param args
    */
-  private _normalizeGetMethod(userArgs: any[]): void {
-    const raw = userArgs.shift();
+  private _normalizeKeys(args: any[]): string[] {
+    const raw = args.shift();
     if (!Array.isArray(raw) && typeof raw !== 'object') {
       this.isSoloGet = true;
     }
@@ -54,11 +60,12 @@ export default class StorageRequestContext {
       keys = typeof raw === 'string' ? [ raw ] : [ raw.toString() ];
     } else {
       this.error = { errorCode: 'ItemKeyRequired' };
+      keys = [];
     }
-    this.keysToGet = keys;
+    return keys;
   }
 
-  private _normalizeSetMethod(userArgs: any[]): void {
+  private _normalizeSetMethod(userArgs: any[]): KeyValuePairs {
     let keyValuePairs;
     const arg0 = userArgs.shift();
     if (typeof arg0 === 'object' && !Array.isArray(arg0)) {
@@ -69,11 +76,10 @@ export default class StorageRequestContext {
       };
     }
     if (keyValuePairs) {
-      this.keyValuePairsToSet = keyValuePairs;
+      return keyValuePairs;
     } else {
       this.error = { errorCode: 'InvalidArgument', message: 'Expecting key-value pair object or string key' };
+      return {};
     }
-
-
   }
 }

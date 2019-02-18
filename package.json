@@ -12,7 +12,9 @@
     "packages/*"
   ],
   "devDependencies": {
+    "jest-localstorage-mock": "^2.4.0",
     "lerna": "^3.12.0",
+    "localforage": "^1.7.3",
     "typescript": "^3.3.3"
   }
 }
