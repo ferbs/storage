@@ -11,7 +11,7 @@ describe('@wranggle/storage-core nodejs-style callbacks', () => {
   });
 
 
-  test('"length" derived method accepts callback', done => {
+  test('`length` derived method accepts callback', done => {
     const noPromise = store.length((err, val) => {
       expect(val).toBe(0);
       done();
@@ -19,7 +19,7 @@ describe('@wranggle/storage-core nodejs-style callbacks', () => {
     expect(noPromise).toBeUndefined();
   });
 
-  test('"set" and "get" core data methods accept callbacks', done => {
+  test('`set` and `get` core data methods accept callbacks', done => {
     const noPromise = store.set('nested', 'deeply', () => {
       store.get('nested', (err, val) => {
         expect(err).toBeFalsy();

@@ -14,7 +14,7 @@ describe('@wranggle/storage-core/storage-request-context', () => {
     callback: beforeFn
   }]));
 
-  describe('makeUpstreamRequest', () => {
+  describe('upstreamRequest', () => {
     beforeEach(() => {
       store = buildMemoryStore();
     });
@@ -25,10 +25,10 @@ describe('@wranggle/storage-core/storage-request-context', () => {
         callCount += 1;
         ctx.keyValuePairsForSet = _.mapKeys(ctx.keyValuePairsForSet, (v, k) => k.toUpperCase());
       });
-      appendDecoratorForSet(async (ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => {
+      appendDecoratorForSet((ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => {
         callCount += 1;
         const backup = _.mapKeys(ctx.keyValuePairsForSet, (v, k) => `${k}.bak`);
-        return ctx.makeUpstreamRequest(decorator, DataMethod.Set, backup);
+        return decorator.upstreamRequest(DataMethod.Set, backup);
       });
       appendDecoratorForSet(async (ctx: StorageRequestContext) => {
         callCount += 1;

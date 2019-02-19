@@ -22,7 +22,7 @@ export default function middlewareTraverser(dataStore: IDataStore, decorators: I
           res = Promise.resolve(fn.call(dataStore, ctx, () => Promise.resolve()));
         } else if (ndx < decoratorCount) {
           const decorator = decorators[ndx];
-          const fn = decorator && decorator[methodName]
+          const fn = decorator && decorator[methodName];
           try {
             res = Promise.resolve(fn.call(decorator, ctx, () => callNextLayer(ctx, ndx + 1)));
           } catch (err) {

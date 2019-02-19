@@ -45,6 +45,10 @@ export default class MemoryStore implements IDataStore {
     ctx.result = { ...this._snapshot }; // todo: or deep clone?
   }
 
+  get _dataObject() {
+    return this._snapshot;
+  }
+
   isDataStore = true;
 }
 

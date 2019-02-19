@@ -1,9 +1,10 @@
-import {IStorageOpts, NextLayer } from "./storage-core";
+import {DataMethod, IStorageOpts, NextLayer} from "./storage-core";
 import StorageRequestContext from "./storage-request-context";
 import NoopDecorator from "./noop-decorator";
 
 
 export default class NormalizeArgsDecorator extends NoopDecorator {
+  upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
   constructor(opts?: IStorageOpts) {
     super(opts);

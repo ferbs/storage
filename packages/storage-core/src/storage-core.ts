@@ -1,7 +1,6 @@
 import * as serializedConfig from './serialized-config';
 import {DecoratorFactoryFunction, StoreFactoryFunction} from "./serialized-config";
 import NormalizeArgsDecorator from "./normalize-args-decorator";
-import middlewareTraverser, {MiddlewareTraverser} from "./middleware-traverser";
 import StorageRequestContext from "./storage-request-context";
 import LocalForageAdapterStore from "./local-forage-adapter-store";
 
@@ -59,9 +58,30 @@ export interface IDataStoreLayer {
   snapshot: DataStoreMethod;
   // tried using computed property names here but they confuse my IDE.. eg: [ DataMethod.Get ]: DataStoreMethod
 }
+type UpstreamRequestFunction = (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
 export interface IStorageDecorator extends IDataStoreLayer {
   isStorageDecorator: boolean;
+
+  /**
+   * This `upstreamRequest` method lets a decorator make additional storage method calls, even while handling a user request.
+   *
+   * For example, some fictitious WriteOnceDecorator might check if a key exists before continuing. Within its `set` method,
+   * it might fetch existing keys with:
+   *   `const keys = await this.upstreamRequest(DataMethod.Keys);`
+
+   * Only the decorators/transforms added subsequent to the current/calling decorator are applied, making the behavior consistent
+   * with how its main data methods normally work.
+   *
+   * This method is dynamically added to your decorator when applied (eg, via `store.useDecorator(myDecorator)`.
+   * When using TypeScript, you can declare its presence with:
+   *
+   *     upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
+   *
+   * (First added to let the ExpirationDecorator check for and remove expired items.)
+   * @param ctx
+   */
+  upstreamRequest: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>
 }
 
 export interface IDataStore extends IDataStoreLayer {
@@ -89,7 +109,6 @@ export default class Storage implements LocalForageDbMethodsCore {
   readonly dataStore: IDataStore;
   readonly storageConstructorOpts: IGenericOpts;
   transforms: IStorageDecorator[];
-  _middlewareTransformer = <MiddlewareTraverser | null> null;
 
   constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore, opts=<IStorageOpts>{}) {
     this.storageConstructorOpts = opts;
@@ -222,7 +241,22 @@ export default class Storage implements LocalForageDbMethodsCore {
       decorator = raw;
     }
     decorator && this.transforms.push(decorator);
-    this._middlewareTransformer = null; // to force a middleware rebuild should it have been used already
+    decorator.upstreamRequest = this._upstreamRequestFnForDecorator(decorator);
+  }
+
+  _upstreamRequestFnForDecorator(decorator: IStorageDecorator): UpstreamRequestFunction {
+    return (methodName: DataMethod, ...methodArgs: any[]): Promise<any> => {
+      const ndx = this.transforms.findIndex(d => d === decorator);
+      if (ndx >= 0) {
+        const transforms = this.transforms.slice(ndx + 1);
+        const {dataStore, storageConstructorOpts} = this;
+        const partialCtx = new StorageRequestContext(methodArgs, { methodName, dataStore, storageConstructorOpts, transforms });
+        return partialCtx.makeTransformedRequest();
+      } else {
+        // reachable?
+        return Promise.reject('DecoratorMissing')
+      }
+    };
   }
 
   _dataRequestWithPromiseOrCallback(methodName: DataMethod, args: any[]): Promise<any> | void {

@@ -76,10 +76,15 @@ export interface ITestFixtureArbitraryDecoratorConfig {
 }
 export class TestFixtureArbitraryDecorator extends NoopDecorator {
   private readonly activitiesByMethod = {};
-  
-  constructor(activities: ITestFixtureArbitraryDecoratorConfig[]) {
+  upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
+
+  constructor(activities?: ITestFixtureArbitraryDecoratorConfig[]) {
     super();
-    this.activitiesByMethod = _.groupBy(activities, 'method');
+    this.activitiesByMethod = _.groupBy(activities || [], 'method');
+  }
+  addActivity(activity: ITestFixtureArbitraryDecoratorConfig) {
+    this.activitiesByMethod[activity.method] = this.activitiesByMethod[activity.method] || [];
+    this.activitiesByMethod[activity.method].push(activity);
   }
 }
 Object.values(DataMethod).forEach(methodName => {

@@ -2,6 +2,9 @@ import {DataMethod, IDataStore, IGenericOpts, IStorageDecorator, KeyValuePairs} 
 import middlewareTraverser from "./middleware-traverser";
 
 
+const PrimaryOptionAttribName = 'primary';
+
+
 export default class StorageRequestContext {
   readonly methodName!: DataMethod;
   readonly dataStore!: IDataStore;
@@ -35,24 +38,13 @@ export default class StorageRequestContext {
       this.keysForRemove = this._normalizeKeys(rawArgs);
     }
     this.opts = Object.assign({}, contextData.opts,
-      ...(rawArgs.map(arg => typeof arg === 'string' || typeof arg === 'number' ? { primary: arg } : arg)));
+      ...(rawArgs.map(arg => typeof arg === 'string' || typeof arg === 'number' ? { [ PrimaryOptionAttribName]: arg } : arg)));
   }
 
-  async makeTransformedRequest(): Promise<any> {
+  makeTransformedRequest(): Promise<any> {
     return StorageRequestContext.transformedRequest(this);
   }
-
-  async makeUpstreamRequest(afterDecorator: IStorageDecorator, methodName: DataMethod, ...methodArgs: any[]) {
-    const ndx = this.transforms.findIndex(d => d === afterDecorator);
-    if (ndx >= 0) {
-      const { dataStore, storageConstructorOpts } = this;
-      const transforms = this.transforms.slice(ndx + 1);
-      const partialCtx = new StorageRequestContext(methodArgs, { methodName, dataStore, storageConstructorOpts, transforms });
-      return partialCtx.makeTransformedRequest();
-    } else {
-      throw new Error('CurrentDecoratorNotFound');
-    }
-  }
+  
 
   static async transformedRequest(ctx: StorageRequestContext): Promise<any> {
     const middlewareTransformer = middlewareTraverser(ctx.dataStore, ctx.transforms);
