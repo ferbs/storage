@@ -74,13 +74,14 @@ export interface ITestFixtureArbitraryDecoratorConfig {
   placement: TestFixtureDecoratorPlacement;
   callback: (ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => void;
 }
-export class TestFixtureArbitraryDecorator extends NoopDecorator {
+  export class TestFixtureArbitraryDecorator extends NoopDecorator {
   private readonly activitiesByMethod = {};
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  constructor(activities?: ITestFixtureArbitraryDecoratorConfig[]) {
+  constructor(activities?: ITestFixtureArbitraryDecoratorConfig | ITestFixtureArbitraryDecoratorConfig[]) {
     super();
-    this.activitiesByMethod = _.groupBy(activities || [], 'method');
+    activities = Array.isArray(activities) ? activities : activities ? [ activities ] : [];
+    this.activitiesByMethod = _.groupBy(activities, 'method');
   }
   addActivity(activity: ITestFixtureArbitraryDecoratorConfig) {
     this.activitiesByMethod[activity.method] = this.activitiesByMethod[activity.method] || [];
