@@ -1,4 +1,4 @@
-import {CharPlacement, StringTransform, TestDecoratorForKeys, TestDecoratorForResultStrings, TestFixtureArbitraryDecorator, TestFixtureDecoratorPlacement} from "./test-support/decorator-support";
+import {CharPlacement, ChangeTypeForTestDecorator, TestDecoratorForKeys, TestDecoratorForGetResultStrings, TestFixtureArbitraryDecorator, TestFixtureDecoratorPlacement} from "./test-support/decorator-support";
 import {buildMemoryStore} from "./test-support/fixture-support";
 import {DataMethod} from "../src/storage-core";
 
@@ -32,14 +32,14 @@ describe('@wranggle/storage-core/decorators', () => {
     });
 
     test('after-phase transforms are applied', async () => {
-      store.useTransform(new TestDecoratorForResultStrings(StringTransform.Prepend, 'Big_'));
+      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Prepend, 'Big_'));
       const val = await store.get('moo');
       expect(val).toBe('Big_Cow');
     });
 
     test('transforms are applied to result in reverse of order added, newest first, middleware-style', async () => {
-      store.useTransform(new TestDecoratorForResultStrings(StringTransform.Upcase));
-      store.useTransform(new TestDecoratorForResultStrings(StringTransform.Downcase));
+      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Upcase));
+      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Downcase));
       const val = await store.get('meow');
       expect(val).toBe('CAT');
     });
@@ -109,5 +109,5 @@ describe('@wranggle/storage-core/decorators', () => {
   });
 
 
-// todo: able to add, remove, and reorder decorators even after being used
+// todo: able to add, remove, and reorder decorators even after being used. And test store.insertTransformAt
 });

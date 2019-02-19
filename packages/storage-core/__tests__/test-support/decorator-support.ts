@@ -27,18 +27,18 @@ export class TestDecoratorForKeys extends NoopDecorator {
   }
 }
 
-export enum StringTransform {
+export enum ChangeTypeForTestDecorator {
   Upcase = 'upcase',
   Downcase = 'downcase',
   Prepend = 'prepend',
   Append = 'append',
 }
 
-export class TestDecoratorForResultStrings extends NoopDecorator {
-  changeType: StringTransform;
+export class TestDecoratorForGetResultStrings extends NoopDecorator {
+  changeType: ChangeTypeForTestDecorator;
   chars: string | void;
 
-  constructor(changeType: StringTransform, chars?: string) {
+  constructor(changeType: ChangeTypeForTestDecorator, chars?: string) {
     super();
     this.changeType = changeType;
     this.chars = chars;
@@ -51,13 +51,13 @@ export class TestDecoratorForResultStrings extends NoopDecorator {
     result && Object.keys(result).forEach(k => {
       const val = result[k];
       if (typeof val === 'string') {
-        if (changeType === StringTransform.Upcase) {
+        if (changeType === ChangeTypeForTestDecorator.Upcase) {
           result[k] = val.toUpperCase();
-        } else if (changeType === StringTransform.Downcase) {
+        } else if (changeType === ChangeTypeForTestDecorator.Downcase) {
           result[k] = val.toLowerCase();
-        } else if (changeType === StringTransform.Prepend) {
+        } else if (changeType === ChangeTypeForTestDecorator.Prepend) {
           result[k] = `${this.chars || ''}${val}`;
-        } else if (changeType === StringTransform.Append) {
+        } else if (changeType === ChangeTypeForTestDecorator.Append) {
         result[k] = `${val}${this.chars || ''}`;
         }
       }

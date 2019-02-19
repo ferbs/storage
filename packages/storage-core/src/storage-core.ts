@@ -108,7 +108,7 @@ export default class Storage implements LocalForageDbMethodsCore {
   readonly storageConstructorOpts: IGenericOpts;
   transforms: IStorageDecorator[];
 
-  constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore, opts=<IStorageOpts>{}) {
+  constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore , opts=<IStorageOpts>{}) {
     this.storageConstructorOpts = opts;
     if (typeof dataStore === 'string') {
       this.backingStore = serializedConfig.storeFactory(dataStore, opts);
@@ -232,6 +232,9 @@ export default class Storage implements LocalForageDbMethodsCore {
     this.transforms.splice(pos, 0, decorator);
   }
 
+  createSubsetStore(opts=<IStorageOpts>{}): Storage {
+    return new Storage(this, opts);
+  }
 
   _upstreamRequestFnForDecorator(decorator: IStorageDecorator): UpstreamRequestFunction {
     return (methodName: DataMethod, ...methodArgs: any[]): Promise<any> => {
