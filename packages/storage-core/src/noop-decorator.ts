@@ -1,14 +1,11 @@
-import {IStorageDecorator, IStorageOpts, NextLayer} from "./storage-core";
+import {DataMethod, IStorageDecorator, IStorageOpts, NextLayer} from "./storage-core";
 import StorageRequestContext from "./storage-request-context";
 
 
 export default class NoopDecorator implements IStorageDecorator {
-  
-  constructor(opts?: IStorageOpts) {
-  }
+  upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  async clear(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
-    await next();
+  constructor(opts?: IStorageOpts) {
   }
 
   async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {

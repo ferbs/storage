@@ -19,11 +19,6 @@ export default class LocalForageAdapterStore implements IDataStore {
     ctx.result = res;
   }
 
-  async clear(ctx: StorageRequestContext): Promise<any> {
-    await this.localForage.clear();
-    ctx.result = true;
-  }
-
   async keys(ctx: StorageRequestContext): Promise<any> {
     ctx.result = await this.localForage.keys();
   }

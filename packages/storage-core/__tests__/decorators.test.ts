@@ -45,7 +45,7 @@ describe('@wranggle/storage-core/decorators', () => {
     });
   });
 
-  describe.only('error in layer', () => {
+  describe('error in layer', () => {
     let callCount;
 
     const buildCallCountDecorator = (placement: TestFixtureDecoratorPlacement) => new TestFixtureArbitraryDecorator({

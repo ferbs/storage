@@ -20,13 +20,6 @@ export default class MemoryStore implements IDataStore {
     ctx.result = res;
   }
 
-  async clear(ctx: StorageRequestContext): Promise<any> {
-    // note: deleting in a loop rather than resetting to a fresh object to preserve any references to the passed in engine
-    Object.keys(this._snapshot).forEach(k => {
-      delete this._snapshot[k];
-    });
-  }
-
   async keys(ctx: StorageRequestContext): Promise<any> {
     ctx.result = Object.keys(this._snapshot);
   }

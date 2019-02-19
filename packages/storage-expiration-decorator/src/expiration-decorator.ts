@@ -6,14 +6,14 @@ import {endsWith} from "@wranggle/storage-core/src/util/string-util";
 const Minute = 1000 * 60;
 
 
-const DefaultOpts = <IStorageExpirationDecoratorOpts>{
+const DefaultOpts = <IExpirationDecoratorOpts>{
   polling: Minute * 1.4,
   expirationKeySuffix: ':exp_',
   valueKeySuffix: ':val_',
   duration: Minute * 30  // uses "primary" option if duration not present
 };
 
-export interface IStorageExpirationDecoratorOpts {
+export interface IExpirationDecoratorOpts {
   polling: number | boolean;
   expirationKeySuffix: string;
   valueKeySuffix: string;
@@ -26,12 +26,12 @@ type TransformedKey = string;
 
 
 export default class ExpirationDecorator implements IStorageDecorator {
-  private opts: IStorageExpirationDecoratorOpts;
+  private opts: IExpirationDecoratorOpts;
   private _stopped = false;
   private _expiredItemsLastDeletedAt = 0;
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  constructor(opts?: Partial<IStorageExpirationDecoratorOpts>) {
+  constructor(opts?: Partial<IExpirationDecoratorOpts>) {
     opts = Object.assign({}, DefaultOpts, opts);
     if (typeof opts.primary === 'number') {
       opts.duration = opts.primary;
@@ -39,12 +39,8 @@ export default class ExpirationDecorator implements IStorageDecorator {
     if (opts.polling === true) {
       opts.polling = DefaultOpts.polling;
     }
-    this.opts = opts as IStorageExpirationDecoratorOpts;
+    this.opts = opts as IExpirationDecoratorOpts;
     this._initExpirationPolling();
-  }
-
-  async clear(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
-    await next();
   }
 
   async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {

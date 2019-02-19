@@ -1,7 +1,7 @@
 import {buildMemoryStore} from "@wranggle/storage-core/__tests__/test-support/fixture-support";
 const _ = require('lodash');
 import testBasicStoreBehaviors from "@wranggle/storage-core/__tests__/test-support/shared-behaves-like-store";
-import ExpirationDecorator, {IStorageExpirationDecoratorOpts} from '../src/expiration-decorator';
+import ExpirationDecorator, {IExpirationDecoratorOpts} from '../src/expiration-decorator';
 
 
 describe('@wranggle/expiration-decorator', () => {
@@ -19,7 +19,7 @@ describe('@wranggle/expiration-decorator', () => {
     decorator && decorator.stop();
   });
 
-  const applyTestDecorator = (args=<Partial<IStorageExpirationDecoratorOpts>>{}) => {
+  const applyTestDecorator = (args=<Partial<IExpirationDecoratorOpts>>{}) => {
     decorator = new ExpirationDecorator(args);
     store.useTransform(decorator);
   };
@@ -44,7 +44,7 @@ describe('@wranggle/expiration-decorator', () => {
     test('persist expiration timestamp when setting data', async () => {
       applyTestDecorator({ duration: 10000 });
       await store.set('aa', 11);
-      const data = store.dataStore._dataObject;
+      const data = store.backingStore._dataObject;
       expect(data['aa:val_']).toBe(11);
       expect(data['aa:exp_']).toBe(Now + 10000);
       expect(_.size(data)).toBe(2);
@@ -53,7 +53,7 @@ describe('@wranggle/expiration-decorator', () => {
     test('interpret "primary" option as duration', async () => {
       applyTestDecorator({ primary: 5000 }); // set by StorageRequestContext/StorageCore when parsing user options
       await store.set('abc', 123);
-      expect(_.get(store, 'dataStore._dataObject.abc:exp_')).toBe(Now + 5000);
+      expect(_.get(store, 'backingStore._dataObject.abc:exp_')).toBe(Now + 5000);
     });
 
     test('permit passed-in user override duration when calling "set"', async () => {
@@ -61,7 +61,7 @@ describe('@wranggle/expiration-decorator', () => {
       await store.set('key1', 'myValue1', 1000);
       await store.set({ key2: 'myValue2' }, { duration: 2000 });
       await store.set({ key3: 'myValue3' }, 3000);
-      const data = store.dataStore._dataObject;
+      const data = store.backingStore._dataObject;
       expect(_.size(data)).toBe(6);
       const expirations = [ 1,2,3 ].map(n => data[`key${n}:exp_`] - Now);
       expect(expirations).toEqual([ 1000, 2000, 3000 ]);
@@ -72,14 +72,14 @@ describe('@wranggle/expiration-decorator', () => {
   describe("expired items", () => {
     beforeEach(() => {
       applyTestDecorator();
-      Object.assign(store.dataStore._dataObject, RawFixtureData_StaleItem);
+      Object.assign(store.backingStore._dataObject, RawFixtureData_StaleItem);
     });
 
     it('removes expired items on `get`', async () => {
       const vals = await store.get([ 'recent', 'stale' ]);
       expect(_.size(vals)).toBe(1);
       expect(vals.recent).toBe('good');
-      expect(_.size(store.dataStore._dataObject)).toBe(2);
+      expect(_.size(store.backingStore._dataObject)).toBe(2);
     });
 
     it('removes expired items for `keys`', async () => {
@@ -103,7 +103,7 @@ describe('@wranggle/expiration-decorator', () => {
       applyTestDecorator({ polling: 1, duration: 1 });
       await store.set('poof', 'almost expired');
       await store.set('keep', 'longer', 100);
-      const data = store.dataStore._dataObject;
+      const data = store.backingStore._dataObject;
       expect(_.size(data)).toBe(4);
       await waitMs(3);
       expect(_.size(data)).toBe(2);
@@ -111,7 +111,7 @@ describe('@wranggle/expiration-decorator', () => {
 
     test('should honor option to disable polling', async () => {
       applyTestDecorator({ polling: false, duration: 1 });
-      const data = store.dataStore._dataObject;
+      const data = store.backingStore._dataObject;
       Object.assign(data, RawFixtureData_StaleItem);
       expect(_.size(data)).toBe(4);
       await waitMs(3);

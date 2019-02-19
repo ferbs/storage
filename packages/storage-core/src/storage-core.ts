@@ -38,7 +38,6 @@ export type NextLayer = () => Promise<any>;
 export type DataStoreMethod = (ctx: StorageRequestContext, next: NextLayer) => Promise<any>;
 
 export enum DataMethod {
-  Clear = 'clear',
   Get = 'get',
   Keys = 'keys',
   Remove = 'remove',
@@ -50,7 +49,6 @@ export enum DataMethod {
  * all input parameters to have been normalized, and do not need to implement alias method names and such.
  */
 export interface IDataStoreLayer {
-  clear: DataStoreMethod;
   get: DataStoreMethod;
   keys: DataStoreMethod;
   remove: DataStoreMethod;
@@ -106,18 +104,18 @@ export interface KeyValuePairs {
 
 
 export default class Storage implements LocalForageDbMethodsCore {
-  readonly dataStore: IDataStore;
+  readonly backingStore: IDataStore;
   readonly storageConstructorOpts: IGenericOpts;
   transforms: IStorageDecorator[];
 
   constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore, opts=<IStorageOpts>{}) {
     this.storageConstructorOpts = opts;
     if (typeof dataStore === 'string') {
-      this.dataStore = serializedConfig.storeFactory(dataStore, opts);
+      this.backingStore = serializedConfig.storeFactory(dataStore, opts);
     } else if (this._isLocalForage(dataStore)) {
-      this.dataStore = new LocalForageAdapterStore(dataStore as LocalForageDbMethodsCore);
+      this.backingStore = new LocalForageAdapterStore(dataStore as LocalForageDbMethodsCore);
     } else if (this._isDataStore(dataStore)) {
-      this.dataStore = dataStore as IDataStore;
+      this.backingStore = dataStore as IDataStore;
     } else {
       throw new Error('Data store required');
     }
@@ -134,16 +132,16 @@ export default class Storage implements LocalForageDbMethodsCore {
     serializedConfig.registerDecorator(engineType, engineFactory);
   }
 
-  clear(opts?: IGenericOpts): Promise<void>;
-  clear(opts?: IGenericOpts, callback?: (err: any) => void): void;
+  clear(): Promise<void>;
+  clear(callback: (err: any) => void): void;
   clear(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Clear, args);
+    return this._useCallbackOrReturnPromise(this._derivedClear(), args[args.length - 1]);
   }
-  
+
   get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts): Promise<T>;
   get<T>(keys: ItemKey | ItemKeys | KeyValuePairs, opts?: IGenericOpts, callback?: NodejsCallback): void;
   get(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Get, args);
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Get, ...args);
   }
 
   /**
@@ -168,42 +166,26 @@ export default class Storage implements LocalForageDbMethodsCore {
   iterate(iteratee: (value: any, key: string, iterationNumber: number) => any, callback: NodejsCallback): void;
   iterate(iteratee: (value: any, key: string, iterationNumber: number) => any): Promise<any>;
   iterate(...args: any[]): Promise<any> | void {
-    const iterator = args.shift();
-    const cb = args.pop();
-    const loop = (async () => {
-      const keys = await (this._dataRequestWithPromiseOrCallback(DataMethod.Keys, []) as Promise<string[]>);
-      let ndx = 0;
-      for (let key of keys) {
-        ndx += 1; // 1-based in localForage (says docs.. todo: try/test)
-        const val = await this.get(key);
-        const out = iterator(val, key, ndx);
-        if (out === void(0)) {
-          break;
-        }
-      }
-    });
-    return this._useCallbackOrReturnPromise(loop(), cb);
+    const iterator = args.shift(); // if you don't like the look of shift and change this, make sure to check args.length > 1 before using the iterator as the callback
+    return this._useCallbackOrReturnPromise(this._derivedIterate(iterator), args[args.length - 1]);
   }
 
   keys(opts?: IGenericOpts): Promise<string[]>;
   keys(callback: NodejsCallback, opts?: IGenericOpts): void;
   keys(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Keys, args);
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Keys, ...args);
   }
 
   length(): Promise<number>;
   length(callback: NodejsCallback): void;
   length(...args: any[]): Promise<any> | void {
-    const cb = args.pop();
-    const promisedLength = (this._dataRequestWithPromiseOrCallback(DataMethod.Keys, []) as Promise<any>)
-      .then(keys => Promise.resolve(keys.length));
-    return this._useCallbackOrReturnPromise(promisedLength, cb);
+    return this._useCallbackOrReturnPromise(this._derivedLength(), args[args.length - 1]);
   }
 
   remove(keys: ItemKey | ItemKeys, opts?: IGenericOpts): Promise<any>;
   remove(keys: ItemKey | ItemKeys, opts?: IGenericOpts, callback?: NodejsCallback): void;
   remove(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Remove, args);
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Remove, ...args);
   }
 
   removeItem(key: string): Promise<void>;
@@ -217,7 +199,7 @@ export default class Storage implements LocalForageDbMethodsCore {
   set(key: string, value: any, opts?: IGenericOpts): Promise<any>;
   set(key: string, value: any, opts?: IGenericOpts, callback?: NodejsCallback): void;
   set(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Set, args);
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Set, ...args);
   }
 
   setItem<T>(key: string, value: T): Promise<T>;
@@ -229,9 +211,8 @@ export default class Storage implements LocalForageDbMethodsCore {
   snapshot(opts?: IGenericOpts): Promise<string[]>;
   snapshot(opts?: IGenericOpts, callback?: NodejsCallback): void;
   snapshot(...args: any[]): Promise<any> | void {
-    return this._dataRequestWithPromiseOrCallback(DataMethod.Snapshot, args);
+    return this._dataRequestWithPromiseOrCallback(DataMethod.Snapshot, ...args);
   }
-
 
   useTransform(raw: string | IStorageDecorator, opts?: IGenericOpts) {
     let decorator;
@@ -240,17 +221,25 @@ export default class Storage implements LocalForageDbMethodsCore {
     } else {
       decorator = raw;
     }
-    decorator && this.transforms.push(decorator);
-    decorator.upstreamRequest = this._upstreamRequestFnForDecorator(decorator);
+    if (decorator) {
+      this._extendDecorator(decorator);
+      this.transforms.push(decorator);
+    }
   }
+
+  insertTransformAt(decorator: IStorageDecorator, pos: number) {
+    this._extendDecorator(decorator);
+    this.transforms.splice(pos, 0, decorator);
+  }
+
 
   _upstreamRequestFnForDecorator(decorator: IStorageDecorator): UpstreamRequestFunction {
     return (methodName: DataMethod, ...methodArgs: any[]): Promise<any> => {
       const ndx = this.transforms.findIndex(d => d === decorator);
       if (ndx >= 0) {
         const transforms = this.transforms.slice(ndx + 1);
-        const {dataStore, storageConstructorOpts} = this;
-        const partialCtx = new StorageRequestContext(methodArgs, { methodName, dataStore, storageConstructorOpts, transforms });
+        const {backingStore, storageConstructorOpts} = this;
+        const partialCtx = new StorageRequestContext({ methodName, backingStore, storageConstructorOpts, transforms }, ...methodArgs);
         return partialCtx.makeTransformedRequest();
       } else {
         // reachable?
@@ -259,12 +248,32 @@ export default class Storage implements LocalForageDbMethodsCore {
     };
   }
 
-  _dataRequestWithPromiseOrCallback(methodName: DataMethod, args: any[]): Promise<any> | void {
-    const { dataStore, transforms, storageConstructorOpts } = this;
-    const ctx = new StorageRequestContext(args, { methodName, dataStore, transforms, storageConstructorOpts });
-    return this._useCallbackOrReturnPromise(ctx.makeTransformedRequest(), ctx.nodejsCallback);
+  async _derivedClear(): Promise<any> {
+    const keys = await this._dataRequest(DataMethod.Keys); // needs to go through Keys because decorators often create their own namespaces on top of a data store holding unrelated items (that should not be removed)
+    return this._dataRequest(DataMethod.Remove, keys);
   }
 
+  async _derivedLength(): Promise<any> {
+    const keys = await this._dataRequest(DataMethod.Keys);
+    return keys.length;
+  }
+
+  async _derivedIterate(iterator: Function): Promise<any> {
+    const keys = await this._dataRequest(DataMethod.Keys);
+    let ndx = 0;
+    for (let key of keys) {
+      ndx += 1; // localForage docs says index is 1-based
+      const val = await this.get(key);
+      const out = iterator(val, key, ndx);
+      if (out === void(0)) {
+        break;
+      }
+    }
+  }
+
+  _extendDecorator(decorator: IStorageDecorator) {
+    decorator.upstreamRequest = this._upstreamRequestFnForDecorator(decorator);
+  }
 
   private _isLocalForage(val: any): boolean {
     return val && [ 'getItem', 'setItem' ].every(m => typeof val[m] === 'function');
@@ -274,11 +283,25 @@ export default class Storage implements LocalForageDbMethodsCore {
     return val && val.isDataStore && [ 'get', 'set' ].every(m => typeof val[m] === 'function');
   }
 
-  _useCallbackOrReturnPromise(actualPromise: Promise<any>, cb?: NodejsCallback): Promise<any> | void {
+  private _dataRequest(methodName: DataMethod, ...args: any[]): Promise<any> {
+    const { backingStore, transforms, storageConstructorOpts } = this;
+    const ctx = new StorageRequestContext({ methodName, backingStore, transforms, storageConstructorOpts }, ...args);
+    return ctx.makeTransformedRequest();
+  }
+
+  private _dataRequestWithPromiseOrCallback(methodName: DataMethod, ...args: any[]): Promise<any> | void {
+    let cb;
+    if (typeof args[args.length - 1] === 'function') {
+      cb = args.pop();
+    }
+    return this._useCallbackOrReturnPromise(this._dataRequest(methodName, ...args), cb);
+  }
+
+  private _useCallbackOrReturnPromise(promise: Promise<any>, cb?: NodejsCallback): Promise<any> | void {
     if (typeof cb === 'function') {
-      actualPromise.then(result => cb(null, result)).catch(err => cb(err));
+      promise.then(result => cb(null, result)).catch(err => cb(err));
     } else {
-      return actualPromise;
+      return promise;
     }
   }
 

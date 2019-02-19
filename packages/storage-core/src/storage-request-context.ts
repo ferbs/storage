@@ -7,7 +7,7 @@ const PrimaryOptionAttribName = 'primary';
 
 export default class StorageRequestContext {
   readonly methodName!: DataMethod;
-  readonly dataStore!: IDataStore;
+  readonly backingStore!: IDataStore;
   readonly transforms!: IStorageDecorator[];
   readonly storageConstructorOpts!: IGenericOpts;
 
@@ -19,26 +19,23 @@ export default class StorageRequestContext {
   opts: IGenericOpts;
   error?: any;
   result?: any;
-  isSoloGet?: boolean;
 
 
-  constructor(userArgs: any[], contextData: Partial<StorageRequestContext>) {
-    Object.assign(this, contextData); // methodName, dataStore, transforms, and storageConstructorOpts
-    const rawArgs = userArgs.slice(0);
-    if (typeof rawArgs[rawArgs.length - 1] === 'function') {
-      this.nodejsCallback = rawArgs.pop();
+  constructor(contextData: Partial<StorageRequestContext>, ...userArgs: any[]) {
+    Object.assign(this, contextData); // methodName, backingStore, transforms, and storageConstructorOpts
+    if (typeof userArgs[userArgs.length - 1] === 'function') { // todo: or throw an error? can expect/require promise-based args at this point, relying on main StorageCore facade to universalify it
+      this.nodejsCallback = userArgs.pop();
     }
     const methodName = this.methodName;
-
     if (methodName === DataMethod.Get) {
-      this.keysForGet = this._normalizeKeys(rawArgs);
+      this.keysForGet = this._normalizeKeys(userArgs);
     } else if (methodName === DataMethod.Set) {
-      this.keyValuePairsForSet = this._normalizedKeyValuePairsForSet(rawArgs);
+      this.keyValuePairsForSet = this._normalizedKeyValuePairsForSet(userArgs);
     } else if (methodName === DataMethod.Remove) {
-      this.keysForRemove = this._normalizeKeys(rawArgs);
+      this.keysForRemove = this._normalizeKeys(userArgs);
     }
     this.opts = Object.assign({}, contextData.opts,
-      ...(rawArgs.map(arg => typeof arg === 'string' || typeof arg === 'number' ? { [ PrimaryOptionAttribName]: arg } : arg)));
+      ...(userArgs.map(arg => typeof arg === 'string' || typeof arg === 'number' ? { [ PrimaryOptionAttribName]: arg } : arg)));
   }
 
   makeTransformedRequest(): Promise<any> {
@@ -47,7 +44,7 @@ export default class StorageRequestContext {
   
 
   static async transformedRequest(ctx: StorageRequestContext): Promise<any> {
-    const middlewareTransformer = middlewareTraverser(ctx.dataStore, ctx.transforms);
+    const middlewareTransformer = middlewareTraverser(ctx.backingStore, ctx.transforms);
     try {
       await middlewareTransformer(ctx);
     } catch (err) {
@@ -72,9 +69,6 @@ export default class StorageRequestContext {
    */
   private _normalizeKeys(args: any[]): string[] {
     const raw = args.shift();
-    if (!Array.isArray(raw) && typeof raw !== 'object') {
-      this.isSoloGet = true;
-    }
     let keys;
     if (Array.isArray(raw)) {
       keys = raw;
