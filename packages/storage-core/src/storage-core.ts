@@ -83,6 +83,7 @@ export interface IStorageLayer extends IDataStoreLayer {
 }
 
 export interface IDataStore extends IDataStoreLayer {
+  // todo: dataStoreRegistryInfo and remove isDataStore.
   isDataStore: boolean;
 }
 
