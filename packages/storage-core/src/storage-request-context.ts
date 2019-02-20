@@ -1,4 +1,4 @@
-import {DataMethod, IDataStore, IGenericOpts, IStorageDecorator, KeyValuePairs} from "./storage-core";
+import {DataMethod, IDataStore, IGenericOpts, IStorageLayer, KeyValuePairs} from "./storage-core";
 import middlewareTraverser from "./middleware-traverser";
 
 
@@ -8,7 +8,7 @@ const PrimaryOptionAttribName = 'primary';
 export default class StorageRequestContext {
   readonly methodName!: DataMethod;
   readonly backingStore!: IDataStore;
-  readonly transforms!: IStorageDecorator[];
+  readonly layers!: IStorageLayer[];
   readonly storageConstructorOpts!: IGenericOpts;
 
   nodejsCallback?: (...args: any[]) => any;
@@ -22,7 +22,7 @@ export default class StorageRequestContext {
 
 
   constructor(contextData: Partial<StorageRequestContext>, ...userArgs: any[]) {
-    Object.assign(this, contextData); // methodName, backingStore, transforms, and storageConstructorOpts
+    Object.assign(this, contextData); // methodName, backingStore, layers, and storageConstructorOpts
     if (typeof userArgs[userArgs.length - 1] === 'function') { // todo: or throw an error? can expect/require promise-based args at this point, relying on main StorageCore facade to universalify it
       this.nodejsCallback = userArgs.pop();
     }
@@ -44,7 +44,7 @@ export default class StorageRequestContext {
   
 
   static async transformedRequest(ctx: StorageRequestContext): Promise<any> {
-    const middlewareTransformer = middlewareTraverser(ctx.backingStore, ctx.transforms);
+    const middlewareTransformer = middlewareTraverser(ctx.backingStore, ctx.layers);
     try {
       await middlewareTransformer(ctx);
     } catch (err) {

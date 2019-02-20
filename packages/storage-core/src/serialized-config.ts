@@ -1,25 +1,40 @@
-import Storage, {IDataStore, IStorageDecorator, IGenericOpts} from "./storage-core";
+import Storage, {IDataStore, IStorageLayer, IGenericOpts} from "./storage-core";
 
+enum Registry {
+  Store = 'Store',
+  Layer = 'Layer',
+}
+interface Registries {
+  [Registry.Store]: IStoreRegistry;
+  [Registry.Layer]: ILayerRegistry;
+}
+const Registries = <Registries>{
+  [Registry.Store]: {},
+  [Registry.Layer]: {},
+};
 
-
-const registeredStoreFactoryByType = <IStoreRegistry>{};
+type StoreType = string;
 export type StoreFactoryFunction = (opts?: IGenericOpts) => IDataStore;
 interface IStoreRegistry {
   [ key: string ]: StoreFactoryFunction;
 }
 
-const registeredDecoratorFactoryByType = <IDecoratorRegistry>{};
-export type DecoratorFactoryFunction = (opts?: IGenericOpts) => IStorageDecorator;
-interface IDecoratorRegistry {
-  [ key: string ]: DecoratorFactoryFunction;
+type LayerType = string;
+export type LayerFactoryFunction = (opts?: IGenericOpts) => IStorageLayer;
+interface ILayerRegistry {
+  [ key: string ]: LayerFactoryFunction;
 }
 
-export function registerStore(storeType: string, storeFactory: StoreFactoryFunction) : void {
-  registeredStoreFactoryByType[storeType] = storeFactory;
+export function registerStore(storeType: StoreType, storeFactory: StoreFactoryFunction) : void {
+  Registries[Registry.Store][storeType] = storeFactory;
 }
 
-export function registerDecorator(decoratorType: string, decoratorFactory: DecoratorFactoryFunction) : void {
-  registeredDecoratorFactoryByType[decoratorType] = decoratorFactory;
+export function registerLayer(layerType: LayerType, layerFactory: LayerFactoryFunction) : void {
+  Registries[Registry.Layer][layerType] = layerFactory;
+}
+
+export function getRegistries() {
+  return Registries;
 }
 
 export function storeFactory(storageEngine: string | IDataStore, opts=<IGenericOpts>{}): IDataStore {
@@ -28,7 +43,7 @@ export function storeFactory(storageEngine: string | IDataStore, opts=<IGenericO
   }
   let store;
   if (typeof storageEngine === 'string') {
-    const factory = registeredStoreFactoryByType[storageEngine];
+    const factory = _getStoreFactoryFunction(storageEngine);
     if (!factory) {
       throw new Error(`Storage factory of type "${storageEngine}" not registered`);
     }
@@ -43,37 +58,37 @@ export function storeFactory(storageEngine: string | IDataStore, opts=<IGenericO
   return store;
 }
 
-export function decoratorFactory(decoratorType: string | IStorageDecorator, opts=<IGenericOpts>{}): IStorageDecorator {
-  if (!decoratorType) {
-    throw new Error(`Storage decorator missing`);
+export function layerFactory(layerType: string | IStorageLayer, opts=<IGenericOpts>{}): IStorageLayer {
+  if (!layerType) {
+    throw new Error(`Storage layer missing`);
   }
-  let decorator;
-  if (typeof decoratorType === 'string') {
-    const factory = registeredDecoratorFactoryByType[decoratorType];
+  let layer;
+  if (typeof layerType === 'string') {
+    const factory = _getLayerFactoryFunction(layerType);
     if (!factory) {
-      throw new Error(`Storage factory of type "${decoratorType}" not registered`);
+      throw new Error(`Storage factory of type "${layerType}" not registered`);
     }
-    decorator = factory(opts);
+    layer = factory(opts);
   } else {
-    decorator = decoratorType;
+    layer = layerType;
   }
-  if (!decorator || !decorator.isStorageDecorator) {
-    console.error('Failed to create storage decorator', decoratorType, opts);
-    throw new Error('Invalid storage decorator');
+  if (!layer || !layer.isStorageLayer) {
+    console.error('Failed to create storage layer', layerType, opts);
+    throw new Error('Invalid storage layer');
   }
-  return decorator;
+  return layer;
 }
 
 
-export function appendDecoratorsFromConfig(storage: Storage, config: any): void {
+export function appendLayersFromConfig(storage: Storage, config: any): void {
   if (Array.isArray(config)) {
-    config.forEach(c => _appendDecoratorFromConfig(storage, c));
+    config.forEach(c => _appendLayerFromConfig(storage, c));
   } else {
-    _appendDecoratorFromConfig(storage, config);
+    _appendLayerFromConfig(storage, config);
   }
 }
 
-function _appendDecoratorFromConfig(storage: Storage, config: any): void {
+function _appendLayerFromConfig(storage: Storage, config: any): void {
   if (!config) {
     return;
   }
@@ -81,22 +96,30 @@ function _appendDecoratorFromConfig(storage: Storage, config: any): void {
     Object.keys(config).forEach(k => storage.useTransform(k, config[k]));
     return;
   }
-  let decoratorType, opts;
+  let layerType, opts;
   if (Array.isArray(config)) { // case of a tuple, eg [ 'keyName', { prefix: 'hello/' } ]
     const len = config.length;
     if (len < 1 || len > 2) {
-      console.warn('Invalid decorator configuration. When passing an array, it expects [ decoratorType, options ]', config);
+      console.warn('Invalid layer configuration. When passing an array, it expects [ layerType, options ]', config);
     } else {
-      decoratorType = config[0];
+      layerType = config[0];
       opts = config[1]
     }
   } else if (typeof config === 'string') {
-    decoratorType = config;
+    layerType = config;
     opts = {};
   }
-  if (decoratorType) {
-    storage.useTransform(decoratorType, opts);
+  if (layerType) {
+    storage.useTransform(layerType, opts);
   } else {
-    console.warn('Ignoring invalid decorator configuration', config);
+    console.warn('Ignoring invalid layer configuration', config);
   }
+}
+
+function _getStoreFactoryFunction(storeType: StoreType) {
+  return Registries[Registry.Store][storeType];
+}
+
+function _getLayerFactoryFunction(layerType: LayerType) {
+  return Registries[Registry.Layer][layerType];
 }

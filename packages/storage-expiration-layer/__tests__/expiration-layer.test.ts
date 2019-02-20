@@ -1,11 +1,11 @@
 import {buildMemoryStore} from "@wranggle/storage-core/__tests__/test-support/fixture-support";
 const _ = require('lodash');
 import testBasicStoreBehaviors from "@wranggle/storage-core/__tests__/test-support/shared-behaves-like-store";
-import ExpirationDecorator, {IExpirationDecoratorOpts} from '../src/expiration-decorator';
+import ExpirationLayer, {IExpirationLayerOpts} from '../src/expiration-layer';
 
 
-describe('@wranggle/expiration-decorator', () => {
-  let store, decorator;
+describe('@wranggle/expiration-layer', () => {
+  let store, layer;
   let timeSpy;
   const Now = 1e12;
 
@@ -16,18 +16,18 @@ describe('@wranggle/expiration-decorator', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    decorator && decorator.stop();
+    layer && layer.stop();
   });
 
-  const applyTestDecorator = (args=<Partial<IExpirationDecoratorOpts>>{}) => {
-    decorator = new ExpirationDecorator(args);
-    store.useTransform(decorator);
+  const applyTestLayer = (args=<Partial<IExpirationLayerOpts>>{}) => {
+    layer = new ExpirationLayer(args);
+    store.useTransform(layer);
   };
 
   const waitMs = (ms: number) => new Promise(resolve => setTimeout(() => resolve(), ms));
 
   testBasicStoreBehaviors(() => {
-    applyTestDecorator();
+    applyTestLayer();
     return store;
   });
 
@@ -42,7 +42,7 @@ describe('@wranggle/expiration-decorator', () => {
   describe("item duration", () => {
 
     test('persist expiration timestamp when setting data', async () => {
-      applyTestDecorator({ duration: 10000 });
+      applyTestLayer({ duration: 10000 });
       await store.set('aa', 11);
       const data = store.backingStore._dataObject;
       expect(data['aa:val_']).toBe(11);
@@ -51,13 +51,13 @@ describe('@wranggle/expiration-decorator', () => {
     });
 
     test('interpret "primary" option as duration', async () => {
-      applyTestDecorator({ primary: 5000 }); // set by StorageRequestContext/StorageCore when parsing user options
+      applyTestLayer({ primary: 5000 }); // set by StorageRequestContext/StorageCore when parsing user options
       await store.set('abc', 123);
       expect(_.get(store, 'backingStore._dataObject.abc:exp_')).toBe(Now + 5000);
     });
 
     test('permit passed-in user override duration when calling "set"', async () => {
-      applyTestDecorator();
+      applyTestLayer();
       await store.set('key1', 'myValue1', 1000);
       await store.set({ key2: 'myValue2' }, { duration: 2000 });
       await store.set({ key3: 'myValue3' }, 3000);
@@ -71,7 +71,7 @@ describe('@wranggle/expiration-decorator', () => {
 
   describe("expired items", () => {
     beforeEach(() => {
-      applyTestDecorator();
+      applyTestLayer();
       Object.assign(store.backingStore._dataObject, RawFixtureData_StaleItem);
     });
 
@@ -100,7 +100,7 @@ describe('@wranggle/expiration-decorator', () => {
     });
 
     test('should check for expired items', async () => {
-      applyTestDecorator({ polling: 1, duration: 1 });
+      applyTestLayer({ polling: 1, duration: 1 });
       await store.set('poof', 'almost expired');
       await store.set('keep', 'longer', 100);
       const data = store.backingStore._dataObject;
@@ -110,7 +110,7 @@ describe('@wranggle/expiration-decorator', () => {
     });
 
     test('should honor option to disable polling', async () => {
-      applyTestDecorator({ polling: false, duration: 1 });
+      applyTestLayer({ polling: false, duration: 1 });
       const data = store.backingStore._dataObject;
       Object.assign(data, RawFixtureData_StaleItem);
       expect(_.size(data)).toBe(4);
@@ -125,5 +125,5 @@ describe('@wranggle/expiration-decorator', () => {
 
   // todo: test touchExpiration method
   // todo: test option for custom value/expiration suffix
-  // todo: perhaps implement then test a reflective check of the middleware stack, erroring if it contains more than one ExpirationDecorator
+  // todo: perhaps implement then test a reflective check of the middleware stack, erroring if it contains more than one ExpirationLayer
 });

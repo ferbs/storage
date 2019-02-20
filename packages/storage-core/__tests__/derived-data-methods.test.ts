@@ -43,7 +43,7 @@ describe('@wranggle/storage-core', () => {
     });
 
 
-    // note: testing shared namespaces in key-name-decorator.test.ts. Something here would be nice though
+    // note: testing shared namespaces in key-name-layer.test.ts. Something here would be nice though
 
     // todo: getItem, setItem, removeItem, clear
 

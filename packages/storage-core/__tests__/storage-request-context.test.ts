@@ -1,6 +1,6 @@
 const _ = require('lodash');
 import {buildMemoryStore} from "./test-support/fixture-support";
-import {TestFixtureArbitraryDecorator, TestFixtureDecoratorPlacement} from "./test-support/decorator-support";
+import {TestFixtureArbitraryLayer, TestFixtureLayerPlacement} from "./test-support/layer-support";
 import {DataMethod} from "../src/storage-core";
 import StorageRequestContext from "../src/storage-request-context";
 
@@ -8,9 +8,9 @@ import StorageRequestContext from "../src/storage-request-context";
 describe('@wranggle/storage-core/storage-request-context', () => {
   let store;
 
-  const appendDecoratorForSet = beforeFn => store.useTransform(new TestFixtureArbitraryDecorator([{
+  const appendLayerForSet = beforeFn => store.useTransform(new TestFixtureArbitraryLayer([{
     method: DataMethod.Set,
-    placement: TestFixtureDecoratorPlacement.Before,
+    placement: TestFixtureLayerPlacement.Before,
     callback: beforeFn
   }]));
 
@@ -19,18 +19,18 @@ describe('@wranggle/storage-core/storage-request-context', () => {
       store = buildMemoryStore();
     });
 
-    test("make independent storage requests with only subsequent decorators applied", async () => {
+    test("make independent storage requests with only subsequent layers applied", async () => {
       let callCount = 0;
-      appendDecoratorForSet(async (ctx: StorageRequestContext) => {
+      appendLayerForSet(async (ctx: StorageRequestContext) => {
         callCount += 1;
         ctx.keyValuePairsForSet = _.mapKeys(ctx.keyValuePairsForSet, (v, k) => k.toUpperCase());
       });
-      appendDecoratorForSet((ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => {
+      appendLayerForSet((ctx: StorageRequestContext, layer: TestFixtureArbitraryLayer) => {
         callCount += 1;
         const backup = _.mapKeys(ctx.keyValuePairsForSet, (v, k) => `${k}.bak`);
-        return decorator.upstreamRequest(DataMethod.Set, backup);
+        return layer.upstreamRequest(DataMethod.Set, backup);
       });
-      appendDecoratorForSet(async (ctx: StorageRequestContext) => {
+      appendLayerForSet(async (ctx: StorageRequestContext) => {
         callCount += 1;
         ctx.keyValuePairsForSet = _.mapKeys(ctx.keyValuePairsForSet, (v, k) => `k:${k}`);
       });

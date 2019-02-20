@@ -1,4 +1,4 @@
-import NoopDecorator from "../../src/noop-decorator";
+import NoopLayer from "../../src/noop-layer";
 import StorageRequestContext from "../../src/storage-request-context";
 import {DataMethod, NextLayer} from "../../src/storage-core";
 const _ = require('lodash');
@@ -9,7 +9,7 @@ export enum CharPlacement {
   Suffix = 'suffix',
 }
 
-export class TestDecoratorForKeys extends NoopDecorator {
+export class TestLayerForKeys extends NoopLayer {
   placement: CharPlacement;
   chars: string; 
   
@@ -27,18 +27,18 @@ export class TestDecoratorForKeys extends NoopDecorator {
   }
 }
 
-export enum ChangeTypeForTestDecorator {
+export enum ChangeTypeForTestLayer {
   Upcase = 'upcase',
   Downcase = 'downcase',
   Prepend = 'prepend',
   Append = 'append',
 }
 
-export class TestDecoratorForGetResultStrings extends NoopDecorator {
-  changeType: ChangeTypeForTestDecorator;
+export class TestLayerForGetResultStrings extends NoopLayer {
+  changeType: ChangeTypeForTestLayer;
   chars: string | void;
 
-  constructor(changeType: ChangeTypeForTestDecorator, chars?: string) {
+  constructor(changeType: ChangeTypeForTestLayer, chars?: string) {
     super();
     this.changeType = changeType;
     this.chars = chars;
@@ -51,13 +51,13 @@ export class TestDecoratorForGetResultStrings extends NoopDecorator {
     result && Object.keys(result).forEach(k => {
       const val = result[k];
       if (typeof val === 'string') {
-        if (changeType === ChangeTypeForTestDecorator.Upcase) {
+        if (changeType === ChangeTypeForTestLayer.Upcase) {
           result[k] = val.toUpperCase();
-        } else if (changeType === ChangeTypeForTestDecorator.Downcase) {
+        } else if (changeType === ChangeTypeForTestLayer.Downcase) {
           result[k] = val.toLowerCase();
-        } else if (changeType === ChangeTypeForTestDecorator.Prepend) {
+        } else if (changeType === ChangeTypeForTestLayer.Prepend) {
           result[k] = `${this.chars || ''}${val}`;
-        } else if (changeType === ChangeTypeForTestDecorator.Append) {
+        } else if (changeType === ChangeTypeForTestLayer.Append) {
         result[k] = `${val}${this.chars || ''}`;
         }
       }
@@ -66,33 +66,33 @@ export class TestDecoratorForGetResultStrings extends NoopDecorator {
   }
 }
 
-export enum TestFixtureDecoratorPlacement {
+export enum TestFixtureLayerPlacement {
   Before, After
 }
-export interface ITestFixtureArbitraryDecoratorConfig {
+export interface ITestFixtureArbitraryLayerConfig {
   method: DataMethod;
-  placement: TestFixtureDecoratorPlacement;
-  callback: (ctx: StorageRequestContext, decorator: TestFixtureArbitraryDecorator) => void;
+  placement: TestFixtureLayerPlacement;
+  callback: (ctx: StorageRequestContext, layer: TestFixtureArbitraryLayer) => void;
 }
-  export class TestFixtureArbitraryDecorator extends NoopDecorator {
+  export class TestFixtureArbitraryLayer extends NoopLayer {
   private readonly activitiesByMethod = {};
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  constructor(activities?: ITestFixtureArbitraryDecoratorConfig | ITestFixtureArbitraryDecoratorConfig[]) {
+  constructor(activities?: ITestFixtureArbitraryLayerConfig | ITestFixtureArbitraryLayerConfig[]) {
     super();
     activities = Array.isArray(activities) ? activities : activities ? [ activities ] : [];
     this.activitiesByMethod = _.groupBy(activities, 'method');
   }
-  addActivity(activity: ITestFixtureArbitraryDecoratorConfig) {
+  addActivity(activity: ITestFixtureArbitraryLayerConfig) {
     this.activitiesByMethod[activity.method] = this.activitiesByMethod[activity.method] || [];
     this.activitiesByMethod[activity.method].push(activity);
   }
 }
 Object.values(DataMethod).forEach(methodName => {
-  TestFixtureArbitraryDecorator.prototype[methodName] = async function(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
+  TestFixtureArbitraryLayer.prototype[methodName] = async function(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
     const methods = this.activitiesByMethod[methodName] || [];
-    const callbackBefore = (methods.find(methodDef => methodDef.placement === TestFixtureDecoratorPlacement.Before) || {}).callback;
-    const callbackAfter = (methods.find(methodDef => methodDef.placement === TestFixtureDecoratorPlacement.After) || {}).callback;
+    const callbackBefore = (methods.find(methodDef => methodDef.placement === TestFixtureLayerPlacement.Before) || {}).callback;
+    const callbackAfter = (methods.find(methodDef => methodDef.placement === TestFixtureLayerPlacement.After) || {}).callback;
     if (_.isFunction(callbackBefore)) {
       await callbackBefore(ctx, this);
     }

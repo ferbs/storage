@@ -1,9 +1,9 @@
-import {CharPlacement, ChangeTypeForTestDecorator, TestDecoratorForKeys, TestDecoratorForGetResultStrings, TestFixtureArbitraryDecorator, TestFixtureDecoratorPlacement} from "./test-support/decorator-support";
+import {CharPlacement, ChangeTypeForTestLayer, TestLayerForKeys, TestLayerForGetResultStrings, TestFixtureArbitraryLayer, TestFixtureLayerPlacement} from "./test-support/layer-support";
 import {buildMemoryStore} from "./test-support/fixture-support";
 import {DataMethod} from "../src/storage-core";
 
 
-describe('@wranggle/storage-core/decorators', () => {
+describe('@wranggle/storage-core/layers', () => {
   let store;
   const initialContent = { moo: 'Cow', meow: 'Cat' };
 
@@ -12,15 +12,15 @@ describe('@wranggle/storage-core/decorators', () => {
       store = buildMemoryStore(initialContent);
     });
 
-    test('before-phase transforms are applied', async () => {
-      store.useTransform(new TestDecoratorForKeys(CharPlacement.Prefix, 'm'));
+    test('before-phase layers are applied', async () => {
+      store.useTransform(new TestLayerForKeys(CharPlacement.Prefix, 'm'));
       const val = await store.get('oo');
       expect(val).toBe('Cow');
     });
 
     test('transform applied to keys in order added, oldest first, middleware-style', async () => {
-      store.useTransform(new TestDecoratorForKeys(CharPlacement.Suffix, 'o'));
-      store.useTransform(new TestDecoratorForKeys(CharPlacement.Suffix, 'w'));
+      store.useTransform(new TestLayerForKeys(CharPlacement.Suffix, 'o'));
+      store.useTransform(new TestLayerForKeys(CharPlacement.Suffix, 'w'));
       const val = await store.get('me');
       expect(val).toBe('Cat');
     });
@@ -31,15 +31,15 @@ describe('@wranggle/storage-core/decorators', () => {
       store = buildMemoryStore(initialContent);
     });
 
-    test('after-phase transforms are applied', async () => {
-      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Prepend, 'Big_'));
+    test('after-phase layers are applied', async () => {
+      store.useTransform(new TestLayerForGetResultStrings(ChangeTypeForTestLayer.Prepend, 'Big_'));
       const val = await store.get('moo');
       expect(val).toBe('Big_Cow');
     });
 
-    test('transforms are applied to result in reverse of order added, newest first, middleware-style', async () => {
-      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Upcase));
-      store.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Downcase));
+    test('layers are applied to result in reverse of order added, newest first, middleware-style', async () => {
+      store.useTransform(new TestLayerForGetResultStrings(ChangeTypeForTestLayer.Upcase));
+      store.useTransform(new TestLayerForGetResultStrings(ChangeTypeForTestLayer.Downcase));
       const val = await store.get('meow');
       expect(val).toBe('CAT');
     });
@@ -48,20 +48,20 @@ describe('@wranggle/storage-core/decorators', () => {
   describe('error in layer', () => {
     let callCount;
 
-    const buildCallCountDecorator = (placement: TestFixtureDecoratorPlacement) => new TestFixtureArbitraryDecorator({
+    const buildCallCountLayer = (placement: TestFixtureLayerPlacement) => new TestFixtureArbitraryLayer({
       method: DataMethod.Get,
       placement,
-      callback: (ctx, decorator) => (callCount += 1),
+      callback: (ctx, layer) => (callCount += 1),
     });
-    const buildStoreWithError = (placement: TestFixtureDecoratorPlacement) => {
+    const buildStoreWithError = (placement: TestFixtureLayerPlacement) => {
       store = buildMemoryStore(initialContent);
-      store.useTransform(buildCallCountDecorator(placement));
-      store.useTransform(new TestFixtureArbitraryDecorator({
+      store.useTransform(buildCallCountLayer(placement));
+      store.useTransform(new TestFixtureArbitraryLayer({
         method: DataMethod.Get,
         placement,
-        callback: (ctx, decorator) => ctx.error = 'Kaboom',
+        callback: (ctx, layer) => ctx.error = 'Kaboom',
       }));
-      store.useTransform(buildCallCountDecorator(placement));
+      store.useTransform(buildCallCountLayer(placement));
     };
 
     beforeEach(() => {
@@ -69,7 +69,7 @@ describe('@wranggle/storage-core/decorators', () => {
     });
 
     test('stop traversing request when error applied', async () => {
-      buildStoreWithError(TestFixtureDecoratorPlacement.Before);
+      buildStoreWithError(TestFixtureLayerPlacement.Before);
       let error, result;
       await store.set('aa', 11);
       try {
@@ -84,11 +84,11 @@ describe('@wranggle/storage-core/decorators', () => {
 
 
     test('permit response phase to execute when error present', async () => {
-      buildStoreWithError(TestFixtureDecoratorPlacement.After);
-      store.transforms.unshift(new TestFixtureArbitraryDecorator({
+      buildStoreWithError(TestFixtureLayerPlacement.After);
+      store.layers.unshift(new TestFixtureArbitraryLayer({
         method: DataMethod.Get,
-        placement: TestFixtureDecoratorPlacement.After,
-        callback: (ctx, decorator) => {
+        placement: TestFixtureLayerPlacement.After,
+        callback: (ctx, layer) => {
           if (ctx.error === 'Kaboom') {
             ctx.result = 'MyDefaultValue';
             ctx.error = false;
@@ -109,5 +109,5 @@ describe('@wranggle/storage-core/decorators', () => {
   });
 
 
-// todo: able to add, remove, and reorder decorators even after being used. And test store.insertTransformAt
+// todo: able to add, remove, and reorder layers even after being used. And test store.insertTransformAt
 });

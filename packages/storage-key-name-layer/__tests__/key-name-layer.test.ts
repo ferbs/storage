@@ -1,19 +1,19 @@
 import {buildMemoryStore} from "@wranggle/storage-core/__tests__/test-support/fixture-support";
 const _ = require('lodash');
 import testBasicStoreBehaviors from "@wranggle/storage-core/__tests__/test-support/shared-behaves-like-store";
-import KeyNameDecorator, {IKeyNameDecoratorOpts} from "@wranggle/storage-key-name-decorator/src/key-name-decorator";
+import KeyNameLayer, {IKeyNameLayerOpts} from "../src/key-name-layer";
 
 
-describe('@wranggle/storage-key-name-decorator', () => {
+describe('@wranggle/storage-key-name-layer', () => {
   
-  const buildStore = (opts: Partial<IKeyNameDecoratorOpts>, initialData={}) => {
+  const buildStore = (opts: Partial<IKeyNameLayerOpts>, initialData={}) => {
     const store = buildMemoryStore(initialData);
-    store.useTransform(new KeyNameDecorator(opts));
+    store.useTransform(new KeyNameLayer(opts));
     return store;
   };
   const getRawData = (store) => store.backingStore._dataObject;
 
-  testBasicStoreBehaviors(() => buildStore({ bucket: 'testKeyNameDecorator' }));
+  testBasicStoreBehaviors(() => buildStore({ bucket: 'testKeyNameLayer' }));
 
   test('prefix', async () => {
     const store = buildStore({ prefix: 'pre:' });
@@ -77,7 +77,7 @@ describe('@wranggle/storage-key-name-decorator', () => {
   
   describe('invalid construction', () => {
     test('requires prefix or suffix', () => {
-      expect(() => new KeyNameDecorator()).toThrow()
+      expect(() => new KeyNameLayer()).toThrow()
     });
   });
    
@@ -86,9 +86,9 @@ describe('@wranggle/storage-key-name-decorator', () => {
     beforeEach(() => {
       common = buildStore({ bucket: 'Common' });
       store_1 = common.createSubsetStore();
-      store_1.useTransform(new KeyNameDecorator({ suffix: ':one' }));
+      store_1.useTransform(new KeyNameLayer({ suffix: ':one' }));
       store_2 = common.createSubsetStore();
-      store_2.useTransform(new KeyNameDecorator({ suffix: ':two' }));
+      store_2.useTransform(new KeyNameLayer({ suffix: ':two' }));
     });
     
     test('maintain separate namespaces', async () => {

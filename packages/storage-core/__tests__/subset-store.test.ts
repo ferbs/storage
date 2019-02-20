@@ -1,6 +1,6 @@
 import Storage from '../src/storage-core';
 import {buildMemoryStore} from "./test-support/fixture-support";
-import {ChangeTypeForTestDecorator, TestDecoratorForGetResultStrings  } from "./test-support/decorator-support";
+import {ChangeTypeForTestLayer, TestLayerForGetResultStrings  } from "./test-support/layer-support";
 
 describe('@wranggle/storage-core', () => {
   describe('subset-store', () => {
@@ -9,9 +9,9 @@ describe('@wranggle/storage-core', () => {
     beforeEach(() => {
       shared = buildMemoryStore();
       store_1 = shared.createSubsetStore();
-      store_1.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Upcase));
+      store_1.useTransform(new TestLayerForGetResultStrings(ChangeTypeForTestLayer.Upcase));
       store_2 = new Storage(shared);
-      store_2.useTransform(new TestDecoratorForGetResultStrings(ChangeTypeForTestDecorator.Downcase));
+      store_2.useTransform(new TestLayerForGetResultStrings(ChangeTypeForTestLayer.Downcase));
     });
 
     test('transform on subset store applied to it but not applied to other stores', async () => {
@@ -26,5 +26,5 @@ describe('@wranggle/storage-core', () => {
 
   });
 
-  // see also tests in KeyNameDecorator
+  // see also tests in KeyNameLayer
 });

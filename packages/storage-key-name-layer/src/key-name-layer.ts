@@ -1,9 +1,9 @@
 import StorageRequestContext from "@wranggle/storage-core/src/storage-request-context";
-import {DataMethod, IStorageDecorator, KeyValuePairs, NextLayer } from "@wranggle/storage-core/src/storage-core";
+import {DataMethod, IStorageLayer, KeyValuePairs, NextLayer } from "@wranggle/storage-core/src/storage-core";
 import {startsWith, endsWith, isString} from "@wranggle/storage-core/src/util/string-util";
 
 
-export interface IKeyNameDecoratorOpts {
+export interface IKeyNameLayerOpts {
   /**
    * When present, this string will be prepended to all keys
    */
@@ -28,12 +28,12 @@ export interface IKeyNameDecoratorOpts {
 
   /**
    * Not to be used directly. When serialized construction is used, if a string primitive is present it gets set as the
-   * "primary" option, which this decorator interprets as an alias for `bucket`.
+   * "primary" option, which this layer interprets as an alias for `bucket`.
    */
   primary?: string; 
 }
 
-const DefaultOpts = <IKeyNameDecoratorOpts>{
+const DefaultOpts = <IKeyNameLayerOpts>{
   bucketDelimeter: '/',
 };
 
@@ -42,12 +42,12 @@ type UserKey = string;
 type TransformedKey = string;
 
 
-export default class KeyNameDecorator implements IStorageDecorator {
-  private opts: IKeyNameDecoratorOpts;
+export default class KeyNameLayer implements IStorageLayer {
+  private opts: IKeyNameLayerOpts;
 
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  constructor(opts?: Partial<IKeyNameDecoratorOpts>) {
+  constructor(opts?: Partial<IKeyNameLayerOpts>) {
     opts = Object.assign({}, DefaultOpts, opts);
     if (!opts.bucket && typeof opts.primary === 'string') {
       opts.bucket = opts.primary;
@@ -56,11 +56,11 @@ export default class KeyNameDecorator implements IStorageDecorator {
       opts.prefix = `${isString(opts.prefix) ? opts.prefix : ''}${opts.bucket}${opts.bucketDelimeter}`;
     }
     if (!isString(opts.prefix) && !isString(opts.suffix)) {
-      throw new Error('KeyNameDecorator requires prefix/bucket or suffix');
+      throw new Error('KeyNameLayer requires prefix/bucket or suffix');
     }
     opts.prefix = opts.prefix || '';
     opts.suffix = opts.suffix || '';
-    this.opts = opts as IKeyNameDecoratorOpts;
+    this.opts = opts as IKeyNameLayerOpts;
   }
 
   async get(ctx: StorageRequestContext, next: NextLayer): Promise<any> {
@@ -118,7 +118,7 @@ export default class KeyNameDecorator implements IStorageDecorator {
   }
 
 
-  get isStorageDecorator(): boolean {
+  get isStorageLayer(): boolean {
     return true;
   }
 

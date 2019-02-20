@@ -1,8 +1,8 @@
-import {DataMethod, IStorageDecorator, IStorageOpts, NextLayer} from "./storage-core";
+import {DataMethod, IStorageLayer, IStorageOpts, NextLayer} from "./storage-core";
 import StorageRequestContext from "./storage-request-context";
 
 
-export default class NoopDecorator implements IStorageDecorator {
+export default class NoopLayer implements IStorageLayer {
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
   constructor(opts?: IStorageOpts) {
@@ -29,7 +29,7 @@ export default class NoopDecorator implements IStorageDecorator {
   }
 
 
-  get isStorageDecorator(): boolean {
+  get isStorageLayer(): boolean {
     return true;
   }
 }

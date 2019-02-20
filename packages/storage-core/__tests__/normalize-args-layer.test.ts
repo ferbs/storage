@@ -1,7 +1,7 @@
 import {buildMemoryStore} from "./test-support/fixture-support";
 
 
-describe('@wranggle/storage-core/normalize-args-decorator', () => {
+describe('@wranggle/storage-core/normalize-args-layer', () => {
   let store;
   const initialContent = { aa: 'apple', bb: 'banana' };
 
@@ -9,9 +9,9 @@ describe('@wranggle/storage-core/normalize-args-decorator', () => {
     store = buildMemoryStore(initialContent);
   });
 
-  test("adds NormalizeArgsDecorator by default", () => {
-    expect(store.transforms.length).toBe(1);
-    expect(store.transforms[0].constructor.name).toBe('NormalizeArgsDecorator');
+  test("adds NormalizeArgsLayer by default", () => {
+    expect(store.layers.length).toBe(1);
+    expect(store.layers[0].constructor.name).toBe('NormalizeArgsLayer');
   });
 
   test("Extracts result from object only when a single key is provided in the user request", async () => {

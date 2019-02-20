@@ -1,19 +1,19 @@
 import StorageRequestContext from "@wranggle/storage-core/src/storage-request-context";
-import {DataMethod, IStorageDecorator, KeyValuePairs, NextLayer } from "@wranggle/storage-core/src/storage-core";
+import {DataMethod, IStorageLayer, KeyValuePairs, NextLayer } from "@wranggle/storage-core/src/storage-core";
 import {endsWith} from "@wranggle/storage-core/src/util/string-util";
 
 
 const Minute = 1000 * 60;
 
 
-const DefaultOpts = <IExpirationDecoratorOpts>{
+const DefaultOpts = <IExpirationLayerOpts>{
   polling: Minute * 1.4,
   expirationKeySuffix: ':exp_',
   valueKeySuffix: ':val_',
   duration: Minute * 30  // uses "primary" option if duration not present
 };
 
-export interface IExpirationDecoratorOpts {
+export interface IExpirationLayerOpts {
   polling: number | boolean;
   expirationKeySuffix: string;
   valueKeySuffix: string;
@@ -25,13 +25,13 @@ type UserKey = string;
 type TransformedKey = string;
 
 
-export default class ExpirationDecorator implements IStorageDecorator {
-  private opts: IExpirationDecoratorOpts;
+export default class ExpirationLayer implements IStorageLayer {
+  private opts: IExpirationLayerOpts;
   private _stopped = false;
   private _expiredItemsLastDeletedAt = 0;
   upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-  constructor(opts?: Partial<IExpirationDecoratorOpts>) {
+  constructor(opts?: Partial<IExpirationLayerOpts>) {
     opts = Object.assign({}, DefaultOpts, opts);
     if (typeof opts.primary === 'number') {
       opts.duration = opts.primary;
@@ -39,7 +39,7 @@ export default class ExpirationDecorator implements IStorageDecorator {
     if (opts.polling === true) {
       opts.polling = DefaultOpts.polling;
     }
-    this.opts = opts as IExpirationDecoratorOpts;
+    this.opts = opts as IExpirationLayerOpts;
     this._initExpirationPolling();
   }
 
@@ -152,7 +152,7 @@ export default class ExpirationDecorator implements IStorageDecorator {
   }
 
 
-  get isStorageDecorator(): boolean {
+  get isStorageLayer(): boolean {
     return true;
   }
 

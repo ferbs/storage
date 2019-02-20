@@ -1,6 +1,6 @@
 import Storage from '../src/storage-core';
 import MemoryStore from "../src/memory-store";
-import {CharPlacement, ChangeTypeForTestDecorator, TestDecoratorForKeys, TestDecoratorForGetResultStrings} from "./test-support/decorator-support";
+import {CharPlacement, ChangeTypeForTestLayer, TestLayerForKeys, TestLayerForGetResultStrings} from "./test-support/layer-support";
 import testBasicStoreBehaviors from "./test-support/shared-behaves-like-store";
 
 

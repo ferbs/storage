@@ -1,6 +1,6 @@
 import * as serializedConfig from './serialized-config';
-import {DecoratorFactoryFunction, StoreFactoryFunction} from "./serialized-config";
-import NormalizeArgsDecorator from "./normalize-args-decorator";
+import {LayerFactoryFunction, StoreFactoryFunction} from "./serialized-config";
+import NormalizeArgsLayer from "./normalize-args-layer";
 import StorageRequestContext from "./storage-request-context";
 import LocalForageAdapterStore from "./local-forage-adapter-store";
 
@@ -45,7 +45,7 @@ export enum DataMethod {
   Snapshot = 'snapshot',
 }
 /**
- * Interface for decorators/transforms and underlying stores. It is simpler than the public-facing interface. They can expect
+ * Interface for layers/layers and underlying stores. It is simpler than the public-facing interface. They can expect
  * all input parameters to have been normalized, and do not need to implement alias method names and such.
  */
 export interface IDataStoreLayer {
@@ -58,25 +58,25 @@ export interface IDataStoreLayer {
 }
 type UpstreamRequestFunction = (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
 
-export interface IStorageDecorator extends IDataStoreLayer {
-  isStorageDecorator: boolean;
+export interface IStorageLayer extends IDataStoreLayer {
+  isStorageLayer: boolean;
 
   /**
-   * This `upstreamRequest` method lets a decorator make additional storage method calls, even while handling a user request.
+   * This `upstreamRequest` method lets a layer make additional storage method calls, even while handling a user request.
    *
-   * For example, some fictitious WriteOnceDecorator might check if a key exists before continuing. Within its `set` method,
+   * For example, some fictitious WriteOnceLayer might check if a key exists before continuing. Within its `set` method,
    * it might fetch existing keys with:
    *   `const keys = await this.upstreamRequest(DataMethod.Keys);`
 
-   * Only the decorators/transforms added subsequent to the current/calling decorator are applied, making the behavior consistent
+   * Only the layers/layers added subsequent to the current/calling layer are applied, making the behavior consistent
    * with how its main data methods normally work.
    *
-   * This method is dynamically added to your decorator when applied (eg, via `store.useDecorator(myDecorator)`.
+   * This method is dynamically added to your layer when applied (eg, via `store.useLayer(myLayer)`.
    * When using TypeScript, you can declare its presence with:
    *
    *     upstreamRequest!: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>;
    *
-   * (First added to let the ExpirationDecorator check for and remove expired items.)
+   * (First added to let the ExpirationLayer check for and remove expired items.)
    * @param ctx
    */
   upstreamRequest: (methodName: DataMethod, ...methodArgs: any[]) => Promise<any>
@@ -87,7 +87,7 @@ export interface IDataStore extends IDataStoreLayer {
 }
 
 export interface IStorageOpts {
-  transforms?: Array<string | IStorageDecorator>;
+  layers?: Array<string | IStorageLayer>;
   engine?: any;
 }
 
@@ -106,7 +106,7 @@ export interface KeyValuePairs {
 export default class Storage implements LocalForageDbMethodsCore {
   readonly backingStore: IDataStore;
   readonly storageConstructorOpts: IGenericOpts;
-  transforms: IStorageDecorator[];
+  layers: IStorageLayer[];
 
   constructor(dataStore: IDataStore | string | LocalForageDbMethodsCore, opts=<IStorageOpts>{}) {
     this.storageConstructorOpts = opts;
@@ -120,16 +120,16 @@ export default class Storage implements LocalForageDbMethodsCore {
       throw new Error('Data store required');
     }
 
-    this.transforms = [ new NormalizeArgsDecorator(opts) ];
-    serializedConfig.appendDecoratorsFromConfig(this, opts.transforms);
+    this.layers = [ new NormalizeArgsLayer(opts) ];
+    serializedConfig.appendLayersFromConfig(this, opts.layers);
   }
 
-  static registerStoreFactory(engineType: string, engineFactory: StoreFactoryFunction): void {
-    serializedConfig.registerStore(engineType, engineFactory);
+  static registerStoreFactory(storeType: string, engineFactory: StoreFactoryFunction): void {
+    serializedConfig.registerStore(storeType, engineFactory);
   }
 
-  static registerDecoratorFactory(engineType: string, engineFactory: DecoratorFactoryFunction): void {
-    serializedConfig.registerDecorator(engineType, engineFactory);
+  static registerLayerFactory(layerType: string, engineFactory: LayerFactoryFunction): void {
+    serializedConfig.registerLayer(layerType, engineFactory);
   }
 
   clear(): Promise<void>;
@@ -145,7 +145,7 @@ export default class Storage implements LocalForageDbMethodsCore {
   }
 
   /**
-   * Compatible with LocalForage. Similar to `get` but it does not accept options that are passed along to transforms.
+   * Compatible with LocalForage. Similar to `get` but it does not accept options that are passed along to layers.
    * @param key
    * @param callback
    */
@@ -214,45 +214,45 @@ export default class Storage implements LocalForageDbMethodsCore {
     return this._dataRequestWithPromiseOrCallback(DataMethod.Snapshot, ...args);
   }
 
-  useTransform(raw: string | IStorageDecorator, opts?: IGenericOpts) {
-    let decorator;
+  useTransform(raw: string | IStorageLayer, opts?: IGenericOpts) {
+    let layer;
     if (typeof raw === 'string') {
-      decorator = serializedConfig.decoratorFactory(raw, opts);
+      layer = serializedConfig.layerFactory(raw, opts);
     } else {
-      decorator = raw;
+      layer = raw;
     }
-    if (decorator) {
-      this._extendDecorator(decorator);
-      this.transforms.push(decorator);
+    if (layer) {
+      this._extendLayer(layer);
+      this.layers.push(layer);
     }
   }
 
-  insertTransformAt(decorator: IStorageDecorator, pos: number) {
-    this._extendDecorator(decorator);
-    this.transforms.splice(pos, 0, decorator);
+  insertTransformAt(layer: IStorageLayer, pos: number) {
+    this._extendLayer(layer);
+    this.layers.splice(pos, 0, layer);
   }
 
   createSubsetStore(opts=<IStorageOpts>{}): Storage {
     return new Storage(this, opts);
   }
 
-  _upstreamRequestFnForDecorator(decorator: IStorageDecorator): UpstreamRequestFunction {
+  _upstreamRequestFnForLayer(layer: IStorageLayer): UpstreamRequestFunction {
     return (methodName: DataMethod, ...methodArgs: any[]): Promise<any> => {
-      const ndx = this.transforms.findIndex(d => d === decorator);
+      const ndx = this.layers.findIndex(d => d === layer);
       if (ndx >= 0) {
-        const transforms = this.transforms.slice(ndx + 1);
+        const layers = this.layers.slice(ndx + 1);
         const {backingStore, storageConstructorOpts} = this;
-        const partialCtx = new StorageRequestContext({ methodName, backingStore, storageConstructorOpts, transforms }, ...methodArgs);
+        const partialCtx = new StorageRequestContext({ methodName, backingStore, storageConstructorOpts, layers }, ...methodArgs);
         return partialCtx.makeTransformedRequest();
       } else {
         // reachable?
-        return Promise.reject('DecoratorMissing')
+        return Promise.reject('LayerMissing')
       }
     };
   }
 
   async _derivedClear(): Promise<any> {
-    const keys = await this._dataRequest(DataMethod.Keys); // needs to go through Keys because decorators often create their own namespaces on top of a data store holding unrelated items (that should not be removed)
+    const keys = await this._dataRequest(DataMethod.Keys); // needs to go through Keys because layers often create their own namespaces on top of a data store holding unrelated items (that should not be removed)
     return this._dataRequest(DataMethod.Remove, keys);
   }
 
@@ -274,8 +274,8 @@ export default class Storage implements LocalForageDbMethodsCore {
     }
   }
 
-  _extendDecorator(decorator: IStorageDecorator) {
-    decorator.upstreamRequest = this._upstreamRequestFnForDecorator(decorator);
+  _extendLayer(layer: IStorageLayer) {
+    layer.upstreamRequest = this._upstreamRequestFnForLayer(layer);
   }
 
   private _isLocalForage(val: any): boolean {
@@ -287,8 +287,8 @@ export default class Storage implements LocalForageDbMethodsCore {
   }
 
   private _dataRequest(methodName: DataMethod, ...args: any[]): Promise<any> {
-    const { backingStore, transforms, storageConstructorOpts } = this;
-    const ctx = new StorageRequestContext({ methodName, backingStore, transforms, storageConstructorOpts }, ...args);
+    const { backingStore, layers, storageConstructorOpts } = this;
+    const ctx = new StorageRequestContext({ methodName, backingStore, layers, storageConstructorOpts }, ...args);
     return ctx.makeTransformedRequest();
   }
 
