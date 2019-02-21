@@ -5,15 +5,16 @@ library, letting you incrementally add layers of features to your preferred stor
 item expiration, multiple namespaced instances, encryption, etc.
 
 Unless specified otherwise, WranggleStorage will use the popular [LocalForage](https://github.com/localForage/localForage) library as
-its underlying store when used on a web page. It also offers a file store for Node.js projects and for browser addons/extensions, 
-and you can quite easily create an adapter to any other persistence library. (Covered in the Underlying Stores section below.)     
+its underlying store when used on a web page. It also offers its own underlying stores for Node.js and Electron projects 
+and another for browser addons/extensions but you can quite easily create an adapter to any other persistence library. (Covered 
+in the Underlying Stores section below.)     
     
-It is API compatible with all LocalForage [data methods](https://localForage.github.io/localForage/#data-api), additionally 
-adding [Google Chrome Storage API](https://developer.chrome.com/apps/storage#type-StorageArea) methods (with improvements),    
-plus some additional methods, like `snapshot` and the useful `createSubsetStore`. 
+WranggleStorage is API compatible with all LocalForage [data methods](https://localForage.github.io/localForage/#data-api), additionally 
+ adding [Google Chrome Storage API](https://developer.chrome.com/apps/storage#type-StorageArea) methods (with improvements), plus 
+ some additional methods, like `snapshot` and the useful `createSubsetStore`. 
 
 
-**NOTE:** not yet finished or published on NPM. OSS work in progress. 
+**NOTE:** this project is a work in progress--not yet published on NPM. 
 
 
 ## Example
@@ -22,12 +23,13 @@ In a browser, we might instantiate a WranggleStore and apply expiring-keys to it
 
 ```
 import WranggleStorage from "@wranggle/storage"; // or use a smaller environment-specific package (see below)  
-const myStore = new WranggleStorage(); // with nothing specified, it defaults to LocalForage in the browser, chrome.storage.local in a Chrome browser extension  
-myStore.use({ expire: 1000 * 60 * 60 }); // uses ExpirationLayer, see docs for its options     
+const myStore = new WranggleStorage({ expire: 1000 * 60 * 40 });        
 ```
 
-All data-related methods are asynchronous, preferring promises (and async/await) but also accepting nodejs-style callbacks. 
-We don't notice the presence of the ExpirationLayer in normal use, such as when calling this function: 
+Without having specified an underlying store, it defaults to LocalForage (again, assuming a browser environment) and it
+applies an ExpirationLayer to our store, deleting items after 40 minutes.   
+
+We don't notice the presence of this ExpirationLayer in normal use, such as this: 
 
 ```
 async () => {
@@ -37,11 +39,14 @@ async () => {
 }
 ```
 
-However, if you inspect the actual data (in localStorage/IndexedDB/WebSQL/other) you'll see it additionally holds expiration
-data, which ExpirationLayer enforces in later calls (and does its best to clean expired items up in the background.)     
+All data-related methods are asynchronous, preferring promises (and async/await) but also accepting nodejs-style callbacks.   
+
+If you inspect the actual data written from the above example (in localStorage/IndexedDB/WebSQL/other) you'll see it additionally 
+holds its own expiration meta data which the ExpirationLayer enforces in later calls (and does its best to clean expired items up in the background.)     
 
 We can also splinter off new stores that inherit the behaviors/layers of the parent store. Say we want to keep session data and 
-feed data in separate buckets. Instead of manually adding a prefix to our keys, we can conveniently create separate stores:
+feed data in separate buckets. Instead of manually adding a prefix to our keys everywhere they are used, we can conveniently 
+create separate stores:
 
 ```
 const sessionStore = myStore.createSubsetStore({ bucket: 'Session' });
@@ -50,17 +55,17 @@ sessionStore.set('current', 'one thing').then(whatever);
 feedStore.set('current', 'something different').then(whatever); 
 ```
 
-Both `sessionStore` and `feedStore` above can get/set the same key "current" without collision. The passed in "bucket" option
-told WranggleStorage to add a KeyNameLayer to the new subset store, which manages key prefixing for you.
-
+Both `sessionStore` and `feedStore` above can get/set the same key "current" without collision. Key prefixing is managed for 
+us. The passed in "bucket" option told WranggleStorage to add a KeyNameLayer when it created our new subset stores. Each
+of these inherits the expiration functionality from its "myStore" parent. 
 
 
 ## Feature Layers
 
 
-* [ExpirationLayer](/wranggle/storage/packages/storage-expiration-layer): adds psuedo-expiration functionality for items. 
+* [ExpirationLayer](https://github.com/ferbs/storage/tree/master/packages/storage-expiration-layer): adds psuedo-expiration functionality for items. 
 
-* [KeyNameLayer](/wranggle/storage/packages/storage-key-name-layer): adds prefix and/or suffix to item keys.  
+* [KeyNameLayer](https://github.com/ferbs/storage/tree/master/packages/storage-key-name-layer): adds prefix and/or suffix to item keys.  
 
 * _ListeningLayer_: receives data method commands sent over RPC or some other messaging system. (coming soon)
 
@@ -95,23 +100,36 @@ If not specified, it will use Extension storage if that API is detected, else Lo
 * ElectronRendererStore
  
  
-### Creating Custom Layers and Adapters
+### Creating Custom Stores and Adapters
 
 todo: explain IDataStore interface
 
 
-  
+## WranggleStorage API
+
+todo: write:
+* list all data methods
+* .use and .insertLayerAt
+* createSubsetStore
+* construction: programmatic example; serialized (details and examples) 
+
+
+## Custom Data Layers
+
+todo: explain IDataLayer; example extending NoopLayer
+
+   
 ## Installation and distributions
 
 NOTE: Not yet published on NPM (todo: build system)
 
 For use purely in a browser environment, use _@wranggle/storage-browser_. For Node.js use _@wranggle/storage-node_.
+
 If you are using a bundler (like webpack, browserify, or rollup) you can import just the layers/modules you need, 
 published in _@wranggle/storage-es6_.
-   
-For simplicity, the main _@wranggle/storage_ npm module includes everything mentioned above, even though some Layers 
-require a file system and some require a browser. It uses more space but can be used cross-environment (such as in an Electron project.)
 
-
-
+For Electron apps (both browser and node) or just for simplicity (none of this is very large) use the main _@wranggle/storage_ npm module,
+ which includes everything mentioned above. 
+ 
+ 
  
